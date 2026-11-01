@@ -3,15 +3,17 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { analyzeProject, GraphIndex, type CodeGraph, type CodeNode } from "@bando/core";
+import { describeSummaryError, summarizeModule } from "@bando/core/summarize";
 
 const USAGE = `Uso:
   bando analyze <directorio> [-o graph.json] [--tsconfig ruta]   Analiza un proyecto y guarda el grafo
   bando inspect <símbolo> [-g graph.json]                        Muestra quién llama a un símbolo y a quién llama
-  bando mermaid [-g graph.json] [--packages]                     Diagrama Mermaid de dependencias entre archivos`;
+  bando mermaid [-g graph.json] [--packages]                     Diagrama Mermaid de dependencias entre archivos
+  bando summarize <archivo> [-g graph.json]                      Resume un módulo con IA (requiere ANTHROPIC_API_KEY)`;
 
 const DEFAULT_GRAPH = "graph.json";
 
-function main(argv: string[]): void {
+async function main(argv: string[]): Promise<void> {
   const { values, positionals } = parseArgs({
     args: argv,
     allowPositionals: true,
@@ -29,6 +31,7 @@ function main(argv: string[]): void {
   if (command === "analyze") return analyze(arg ?? ".", values.output, values.tsconfig);
   if (command === "inspect" && arg) return inspect(loadGraph(values.graph), arg);
   if (command === "mermaid") return console.log(mermaid(loadGraph(values.graph), values.packages));
+  if (command === "summarize" && arg) return summarize(loadGraph(values.graph), arg);
 
   console.error(USAGE);
   process.exitCode = 1;
@@ -126,6 +129,22 @@ function inspect(graph: CodeGraph, query: string): void {
   }
 }
 
+async function summarize(graph: CodeGraph, file: string): Promise<void> {
+  // Accept the graph id ("src/a.ts") or a path relative to the current directory.
+  const fileId = graph.nodes.some((n) => n.id === file && n.kind === "file")
+    ? file
+    : path.relative(graph.root, path.resolve(file)).split(path.sep).join("/");
+  try {
+    const source = fs.readFileSync(path.join(graph.root, fileId), "utf8");
+    console.error(`· Resumiendo ${fileId}…\n`);
+    await summarizeModule(graph, fileId, source, { onText: (text) => process.stdout.write(text) });
+    process.stdout.write("\n");
+  } catch (error) {
+    console.error(`\n${describeSummaryError(error)}`);
+    process.exitCode = 1;
+  }
+}
+
 function mermaid(graph: CodeGraph, includePackages: boolean): string {
   const ids = new Map<string, string>();
   const key = (id: string) => {
@@ -167,4 +186,4 @@ function countBy<T>(items: T[], key: (item: T) => string): Record<string, number
   return counts;
 }
 
-main(process.argv.slice(2));
+await main(process.argv.slice(2));

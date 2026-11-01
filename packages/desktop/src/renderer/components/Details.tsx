@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { GraphIndex } from "@bando/core/query";
 import type { CodeEdge, CodeNode } from "@bando/core/types";
 import { NodeLink } from "./Sidebar";
+import { SummaryPanel } from "./SummaryPanel";
 
 /** Files longer than this are shown truncated in the code view. */
 const MAX_CODE_LINES = 400;
@@ -46,6 +47,8 @@ export function Details({ index, node, onSelect }: Props) {
         {node.signature && <pre className="signature">{node.signature}</pre>}
         {node.doc && <p className="doc">{node.doc}</p>}
       </header>
+
+      {node.kind === "file" && <SummaryPanel fileId={node.id} />}
 
       <Group title="Lo llaman">{related(index.incoming(node.id, "calls"), "from", true)}</Group>
       <Group title="Llama a">{related(index.outgoing(node.id, "calls"), "to")}</Group>

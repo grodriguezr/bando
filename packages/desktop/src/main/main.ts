@@ -5,10 +5,14 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import type { CodeGraph } from "@bando/core/types";
+import { SummaryService } from "./summaries.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 let window: BrowserWindow | undefined;
 let currentRoot: string | undefined;
+/** The last completed analysis; summaries use it for context about the module. */
+let currentGraph: CodeGraph | undefined;
+const summaries = new SummaryService();
 
 function createWindow(): void {
   window = new BrowserWindow({
@@ -51,7 +55,10 @@ function analyze(root: string): Promise<CodeGraph> {
     const worker = new Worker(path.join(here, "analyze-worker.js"), { workerData: { root } });
     worker.on("message", (msg: { type: "progress"; message: string } | { type: "done"; graph: CodeGraph }) => {
       if (msg.type === "progress") window?.webContents.send("analyze:progress", msg.message);
-      else resolve(msg.graph);
+      else {
+        currentGraph = msg.graph;
+        resolve(msg.graph);
+      }
     });
     worker.on("error", reject);
     worker.on("exit", (code) => code !== 0 && reject(new Error(`El análisis terminó con código ${code}`)));
@@ -76,6 +83,17 @@ ipcMain.handle("file:read", async (_event, relativePath: string) => {
   // The renderer only gets to read files of the open project.
   if (path.relative(currentRoot, full).startsWith("..")) throw new Error("Ruta fuera del proyecto");
   return fs.readFile(full, "utf8");
+});
+
+ipcMain.handle("summary:cached", (_event, fileId: string) =>
+  currentGraph ? summaries.cached(currentGraph.root, fileId).catch(() => undefined) : undefined,
+);
+
+ipcMain.handle("summary:generate", (event, fileId: string) => {
+  if (!currentGraph) return { error: "No hay proyecto abierto" };
+  return summaries.generate(currentGraph, fileId, (text) => {
+    if (!event.sender.isDestroyed()) event.sender.send("summary:delta", { fileId, text });
+  });
 });
 
 app.whenReady().then(createWindow);
