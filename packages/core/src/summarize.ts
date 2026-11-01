@@ -93,7 +93,7 @@ export function buildSummaryPrompt(
 // ── Files ────────────────────────────────────────────────────────────────
 
 const FILE_SYSTEM_PROMPT = `Eres un ingeniero de software sénior que ayuda a un desarrollador a incorporarse a un codebase que no conoce.
-Recibirás un módulo (un archivo JavaScript/TypeScript), los datos que un análisis estático extrajo de él
+Recibirás un módulo (un archivo de código), los datos que un análisis estático extrajo de él
 (símbolos, imports, quién lo usa) y su código fuente completo.
 
 Escribe un resumen en español, en Markdown, con estas secciones (omite las que no aporten nada):

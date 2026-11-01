@@ -75,7 +75,7 @@ function analyze(root: string): Promise<CodeGraph> {
 
 ipcMain.handle("project:open", async () => {
   const result = await dialog.showOpenDialog(window!, {
-    title: "Abrir proyecto JavaScript/TypeScript",
+    title: "Abrir proyecto",
     properties: ["openDirectory"],
   });
   if (result.canceled || !result.filePaths[0]) return undefined;

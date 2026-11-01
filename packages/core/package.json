@@ -5,7 +5,9 @@
   "type": "module",
   "dependencies": {
     "@anthropic-ai/sdk": "^1.3.0",
-    "typescript": "~5.9.3"
+    "tree-sitter-python": "^0.25.0",
+    "typescript": "~5.9.3",
+    "web-tree-sitter": "^0.27.1"
   },
   "exports": {
     ".": {

@@ -204,7 +204,8 @@ class DocsWriter {
           `${flags} · [líneas ${symbol.line}–${symbol.endLine}](${source}#L${symbol.line}-L${symbol.endLine})`,
           "",
         );
-        if (symbol.signature) lines.push("```ts", symbol.signature, "```", "");
+        if (symbol.signature)
+          lines.push(`\`\`\`${file.id.endsWith(".py") ? "python" : "ts"}`, symbol.signature, "```", "");
         if (symbol.doc) lines.push(symbol.doc, "");
         const callers = this.index.incoming(symbol.id, "calls").map((e) => this.index.node(e.from)!);
         const callees = this.index.outgoing(symbol.id, "calls").map((e) => this.index.node(e.to)!);

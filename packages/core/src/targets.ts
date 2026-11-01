@@ -23,9 +23,9 @@ export function listFolders(graph: CodeGraph): string[] {
   return [...new Set(graph.nodes.filter((n) => n.kind === "file").map((n) => folderOf(n.id)))].sort();
 }
 
-const SOURCE_FILE = /\.(m?[jt]sx?|c[jt]s)$/;
+const SOURCE_FILE = /\.(m?[jt]sx?|c[jt]s|py)$/;
 
-/** True for strings that look like a JS/TS source file: "src/app.ts", "main.tsx"… */
+/** True for strings that look like a source file: "src/app.ts", "main.tsx", "app/models.py"… */
 export function looksLikeSourceFile(text: string): boolean {
   return !/\s/.test(text) && SOURCE_FILE.test(text);
 }

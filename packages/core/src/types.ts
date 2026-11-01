@@ -49,6 +49,8 @@ export interface CodeGraph {
   root: string;
   generatedAt: string;
   tsconfig?: string;
+  /** Languages found and analyzed, e.g. ["javascript/typescript", "python"]. */
+  languages?: string[];
   nodes: CodeNode[];
   edges: CodeEdge[];
   stats: GraphStats;

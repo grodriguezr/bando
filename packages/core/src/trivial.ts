@@ -18,6 +18,8 @@ const DESCRIPTIONS: Record<TrivialKind, string> = {
  * only re-export): describing them doesn't need a model. Undefined for files with any code to explain.
  */
 export function automaticSummary(graph: CodeGraph, fileId: string, source: string): string | undefined {
+  // The classifier reads JavaScript/TypeScript syntax; other languages always go to the model.
+  if (!/\.([mc]?[jt]sx?|json)$/.test(fileId)) return undefined;
   const sf = ts.createSourceFile(fileId, source, ts.ScriptTarget.Latest, true, scriptKind(fileId));
   const kind = classify(sf);
   if (!kind) return undefined;

@@ -112,6 +112,7 @@ describe("resúmenes automáticos (sin IA)", () => {
     assert.equal(summary("createRoot(document.body).render(null);"), undefined, "llamadas de arranque, como main.tsx");
     assert.equal(summary("export class A {}"), undefined);
     assert.equal(summary("export const api = { listar() { return []; } };"), undefined);
+    assert.equal(summary("LIMITE = 10\n", "app/config.py"), undefined, "Python siempre va a la IA");
   });
 });
 

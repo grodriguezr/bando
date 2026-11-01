@@ -500,6 +500,11 @@ function isProjectFile(root: string, fileName: string): boolean {
   return !rel.startsWith("..") && !path.isAbsolute(rel) && !rel.split(/[\\/]/).includes("node_modules");
 }
 
+/** Whether the folder has a tsconfig/jsconfig or any JavaScript/TypeScript source. */
+export function hasJavaScriptSources(root: string): boolean {
+  return findConfig(root) !== undefined || walkSources(root).length > 0;
+}
+
 function findConfig(root: string): string | undefined {
   return ["tsconfig.json", "jsconfig.json"].map((f) => path.join(root, f)).find((f) => fs.existsSync(f));
 }

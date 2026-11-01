@@ -2,7 +2,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
-import { analyzeProject, GraphIndex, type CodeGraph, type CodeNode } from "@bando/core";
+import { analyze as analyzeGraph, GraphIndex, type CodeGraph, type CodeNode } from "@bando/core";
 import { askProject, LOCAL_ASK_BUDGET } from "@bando/core/ask";
 import { exportDocs } from "@bando/core/docs";
 import { defaultConcurrency, SummaryStore } from "@bando/core/summary-store";
@@ -81,8 +81,8 @@ async function main(argv: string[]): Promise<void> {
   process.exitCode = 1;
 }
 
-function analyze(dir: string, output: string, tsconfig?: string): void {
-  const graph = analyzeProject(dir, { tsconfig, onProgress: (m) => console.error(`· ${m}`) });
+async function analyze(dir: string, output: string, tsconfig?: string): Promise<void> {
+  const graph = await analyzeGraph(dir, { tsconfig, onProgress: (m) => console.error(`· ${m}`) });
   fs.writeFileSync(output, JSON.stringify(graph, null, 2));
 
   const index = new GraphIndex(graph);
