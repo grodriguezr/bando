@@ -30,7 +30,11 @@ export class FolderTree {
     for (const file of fileIds) {
       const folder = this.ensure(folderOf(file));
       folder.files.push(file);
-      for (let f: FolderInfo | undefined = folder; f; f = f.parent === undefined ? undefined : this.folders.get(f.parent)) {
+      for (
+        let f: FolderInfo | undefined = folder;
+        f;
+        f = f.parent === undefined ? undefined : this.folders.get(f.parent)
+      ) {
         f.totalFiles++;
       }
     }
@@ -47,7 +51,8 @@ export class FolderTree {
   /** ".", "src", "src/pages" for "src/pages/clientes". */
   ancestors(path: string): string[] {
     const chain: string[] = [];
-    for (let f = this.folders.get(path); f?.parent !== undefined; f = this.folders.get(f.parent)) chain.unshift(f.parent);
+    for (let f = this.folders.get(path); f?.parent !== undefined; f = this.folders.get(f.parent))
+      chain.unshift(f.parent);
     return chain;
   }
 

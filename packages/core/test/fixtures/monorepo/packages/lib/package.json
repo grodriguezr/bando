@@ -2,7 +2,13 @@
   "name": "@demo/lib",
   "type": "module",
   "exports": {
-    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
-    "./math": { "types": "./dist/math.d.ts", "default": "./dist/math.js" }
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./math": {
+      "types": "./dist/math.d.ts",
+      "default": "./dist/math.js"
+    }
   }
 }

@@ -53,7 +53,9 @@ export function dependencyElements(
       const folder = folderOf(node.id);
       if (!expanded.has(folder)) continue;
       const importers = index.incoming(node.id, "imports").length;
-      elements.push({ data: { id: node.id, label: node.name, kind: "file", weight: importers, parent: boxOf(folder) } });
+      elements.push({
+        data: { id: node.id, label: node.name, kind: "file", weight: importers, parent: boxOf(folder) },
+      });
     } else if (node.kind === "package" && includePackages) {
       const importers = index.incoming(node.id, "imports").length;
       elements.push({ data: { id: node.id, label: node.name, kind: "package", weight: importers } });
@@ -142,7 +144,9 @@ export function callElements(index: GraphIndex, focusId: string, depth: number):
   for (const id of level.keys()) {
     for (const edge of index.outgoing(id, "calls")) {
       if (level.has(edge.to)) {
-        elements.push({ data: { id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, count: edge.count } });
+        elements.push({
+          data: { id: `${edge.from}->${edge.to}`, source: edge.from, target: edge.to, count: edge.count },
+        });
       }
     }
   }

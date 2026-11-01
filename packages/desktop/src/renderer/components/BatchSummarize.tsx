@@ -90,7 +90,11 @@ export function BatchSummarize({ targets, noun, onProgress }: Props) {
   }
   const { pending } = status;
   if (!pending.length) {
-    return <p className="muted small">✓ Todos sus {noun} ({targets.length}) tienen un resumen al día.</p>;
+    return (
+      <p className="muted small">
+        ✓ Todos sus {noun} ({targets.length}) tienen un resumen al día.
+      </p>
+    );
   }
   return (
     <div className="batch">

@@ -114,7 +114,14 @@ function renderInline(text: string, resolveLink: LinkResolver | undefined): Reac
     const key = parts.length;
     if (token.startsWith("```")) {
       // Fenced code written on a single line: "```bash npm install```".
-      parts.push(<code key={key}>{token.slice(3, -3).replace(/^(bash|sh|shell|console)\s+/, "").trim()}</code>);
+      parts.push(
+        <code key={key}>
+          {token
+            .slice(3, -3)
+            .replace(/^(bash|sh|shell|console)\s+/, "")
+            .trim()}
+        </code>,
+      );
     } else if (token.startsWith("`")) {
       parts.push(codeSpan(token.slice(1, -1), key, resolveLink));
     } else if (token.startsWith("**")) {

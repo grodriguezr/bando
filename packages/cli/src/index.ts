@@ -88,7 +88,9 @@ function analyze(dir: string, output: string, tsconfig?: string): void {
   const pct = (n: number) => (totalCalls ? `${Math.round((n / totalCalls) * 100)}%` : "0%");
 
   console.log(`\nProyecto: ${graph.root}`);
-  console.log(`  ${stats.files} archivos, ${stats.symbols} símbolos, ${stats.edges} relaciones (${stats.durationMs} ms)`);
+  console.log(
+    `  ${stats.files} archivos, ${stats.symbols} símbolos, ${stats.edges} relaciones (${stats.durationMs} ms)`,
+  );
   console.log(
     `  Llamadas: ${stats.resolvedCalls} internas (${pct(stats.resolvedCalls)}), ` +
       `${stats.externalCalls} a librerías (${pct(stats.externalCalls)}), ` +
@@ -96,7 +98,11 @@ function analyze(dir: string, output: string, tsconfig?: string): void {
   );
 
   const kinds = countBy(graph.nodes, (n) => n.kind);
-  console.log(`  Tipos: ${Object.entries(kinds).map(([k, v]) => `${v} ${k}`).join(", ")}`);
+  console.log(
+    `  Tipos: ${Object.entries(kinds)
+      .map(([k, v]) => `${v} ${k}`)
+      .join(", ")}`,
+  );
 
   const packages = graph.nodes
     .filter((n) => n.kind === "package")
@@ -153,25 +159,48 @@ function inspect(graph: CodeGraph, query: string): void {
     };
     section(
       "Lo llaman",
-      index.incoming(node.id, "calls").map((e) => `${label(index.node(e.from)!)}  (${e.count}×, línea ${e.lines.join(", ")})`),
+      index
+        .incoming(node.id, "calls")
+        .map((e) => `${label(index.node(e.from)!)}  (${e.count}×, línea ${e.lines.join(", ")})`),
     );
     section(
       "Llama a",
       index.outgoing(node.id, "calls").map((e) => `${label(index.node(e.to)!)}  (${e.count}×)`),
     );
-    section("Contiene", index.children(node.id).map((c) => `${c.kind.padEnd(9)} ${c.name}`));
-    section("Importa", index.outgoing(node.id, "imports").map((e) => e.to.replace(/^pkg:/, "📦 ")));
-    section("Importado por", index.incoming(node.id, "imports").map((e) => e.from));
-    section("Hereda de", [...index.outgoing(node.id, "extends"), ...index.outgoing(node.id, "implements")].map((e) => `${e.kind} ${e.to}`));
-    section("Subtipos", [...index.incoming(node.id, "extends"), ...index.incoming(node.id, "implements")].map((e) => e.from));
+    section(
+      "Contiene",
+      index.children(node.id).map((c) => `${c.kind.padEnd(9)} ${c.name}`),
+    );
+    section(
+      "Importa",
+      index.outgoing(node.id, "imports").map((e) => e.to.replace(/^pkg:/, "📦 ")),
+    );
+    section(
+      "Importado por",
+      index.incoming(node.id, "imports").map((e) => e.from),
+    );
+    section(
+      "Hereda de",
+      [...index.outgoing(node.id, "extends"), ...index.outgoing(node.id, "implements")].map((e) => `${e.kind} ${e.to}`),
+    );
+    section(
+      "Subtipos",
+      [...index.incoming(node.id, "extends"), ...index.incoming(node.id, "implements")].map((e) => e.from),
+    );
   }
   if (!exact.length && matches.length > 1) {
-    console.log(`\nOtras coincidencias: ${matches.slice(1, 10).map((n) => n.id).join(", ")}`);
+    console.log(
+      `\nOtras coincidencias: ${matches
+        .slice(1, 10)
+        .map((n) => n.id)
+        .join(", ")}`,
+    );
   }
 }
 
 async function summarize(graph: CodeGraph, target: SummaryTarget, provider: SummaryProvider): Promise<void> {
-  const label = target.kind === "project" ? "el proyecto" : target.kind === "flow" ? `el flujo de ${target.id}` : target.id;
+  const label =
+    target.kind === "project" ? "el proyecto" : target.kind === "flow" ? `el flujo de ${target.id}` : target.id;
   try {
     console.error(`· Resumiendo ${label}…\n`);
     const started = Date.now();
@@ -189,7 +218,8 @@ async function summarize(graph: CodeGraph, target: SummaryTarget, provider: Summ
 
 async function summarizeAll(graph: CodeGraph, provider: SummaryProvider, concurrency: number): Promise<void> {
   const started = Date.now();
-  const label = (t: SummaryTarget) => (t.kind === "project" ? "guía del proyecto" : t.kind === "folder" ? `${t.id}/` : t.id);
+  const label = (t: SummaryTarget) =>
+    t.kind === "project" ? "guía del proyecto" : t.kind === "folder" ? `${t.id}/` : t.id;
   let stop = false;
   process.once("SIGINT", () => {
     stop = true;
@@ -206,7 +236,9 @@ async function summarizeAll(graph: CodeGraph, provider: SummaryProvider, concurr
         console.error(event.total ? `· ${event.total} resúmenes pendientes` : "· Todo está al día.");
       } else if (event.type === "progress") {
         const elapsed = Date.now() - started;
-        const eta = event.done ? ` · ~${Math.round(((elapsed / event.done) * (event.total - event.done)) / 60_000)} min restantes` : "";
+        const eta = event.done
+          ? ` · ~${Math.round(((elapsed / event.done) * (event.total - event.done)) / 60_000)} min restantes`
+          : "";
         console.error(`[${event.done + 1}/${event.total}] ${label(event.target)}${eta}`);
       } else if (event.type === "summarized" && event.error) {
         console.error(`  ✖ ${event.error}`);

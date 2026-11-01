@@ -20,8 +20,8 @@ export function ExportDocs() {
     <div className="job-card">
       <strong>Documentación</strong>
       <span className="small muted">
-        Exporta el proyecto en Markdown: índice con la guía y la arquitectura, una página por carpeta y por archivo,
-        con diagramas y enlaces al código. Se ve directamente en GitHub o GitLab.
+        Exporta el proyecto en Markdown: índice con la guía y la arquitectura, una página por carpeta y por archivo, con
+        diagramas y enlaces al código. Se ve directamente en GitHub o GitLab.
       </span>
       {state.result && s && (
         <span className="small">

@@ -148,7 +148,9 @@ export function App() {
     return (
       <div className="welcome">
         <h1>Bando</h1>
-        <p className="muted">Explora la estructura de un proyecto JavaScript/TypeScript: archivos, dependencias y llamadas.</p>
+        <p className="muted">
+          Explora la estructura de un proyecto JavaScript/TypeScript: archivos, dependencias y llamadas.
+        </p>
         <button className="primary" disabled={loading} onClick={() => load(window.bando.openProject, false)}>
           {loading ? "Analizando…" : "Abrir proyecto"}
         </button>
@@ -229,7 +231,9 @@ export function App() {
             <div className="legend">Clic en una carpeta para abrirla · doble clic en un recuadro para cerrarlo</div>
           )
         )}
-        {graphData.truncated && <div className="legend warn">Hay demasiadas llamadas: se muestran las primeras 40 por nivel</div>}
+        {graphData.truncated && (
+          <div className="legend warn">Hay demasiadas llamadas: se muestran las primeras 40 por nivel</div>
+        )}
       </main>
 
       {selectedId === "project" ? (

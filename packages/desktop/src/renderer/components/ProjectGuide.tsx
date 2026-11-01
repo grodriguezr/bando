@@ -13,10 +13,7 @@ interface Props {
 /** The "where to start" guide for the whole project. */
 export function ProjectGuide({ index, resolveLink }: Props) {
   const [refresh, setRefresh] = useState(0);
-  const folders = useMemo(
-    () => listFolders(index.graph).map((dir) => ({ kind: "folder" as const, id: dir })),
-    [index],
-  );
+  const folders = useMemo(() => listFolders(index.graph).map((dir) => ({ kind: "folder" as const, id: dir })), [index]);
   const name = index.graph.root.split(/[\\/]/).pop();
 
   return (
@@ -26,9 +23,7 @@ export function ProjectGuide({ index, resolveLink }: Props) {
           <span className="badge">proyecto</span>
         </div>
         <h2>Guía para empezar con {name}</h2>
-        <p className="muted small">
-          Cada enlace en el texto lleva al archivo o carpeta correspondiente.
-        </p>
+        <p className="muted small">Cada enlace en el texto lleva al archivo o carpeta correspondiente.</p>
       </header>
       <SummaryPanel target={{ kind: "project" }} title="Guía" resolveLink={resolveLink} refreshKey={refresh} />
       <BatchSummarize targets={folders} noun="carpetas" onProgress={() => setRefresh((n) => n + 1)} />
@@ -39,4 +34,3 @@ export function ProjectGuide({ index, resolveLink }: Props) {
     </aside>
   );
 }
-

@@ -42,7 +42,9 @@ export function Details({ index, node, onSelect, resolveLink }: Props) {
           <span className={`badge kind-${node.kind}`}>{node.kind}</span>
           {node.exported && node.kind !== "package" && node.kind !== "file" && <span className="badge">exportado</span>}
         </div>
-        <h2>{node.kind === "file" || node.kind === "package" ? node.id.replace(/^pkg:/, "") : node.id.split("#")[1]}</h2>
+        <h2>
+          {node.kind === "file" || node.kind === "package" ? node.id.replace(/^pkg:/, "") : node.id.split("#")[1]}
+        </h2>
         {node.file && node.kind !== "file" && (
           <p className="muted small">
             {node.file}:{node.line}–{node.endLine}

@@ -220,11 +220,14 @@ class DocsWriter {
       lines.push(
         "**Importa:**",
         "",
-        ...imports.map((e) => (e.to.startsWith("pkg:") ? `- \`${e.to.slice(4)}\` (paquete)` : `- ${this.fileLink(page, e.to)}`)),
+        ...imports.map((e) =>
+          e.to.startsWith("pkg:") ? `- \`${e.to.slice(4)}\` (paquete)` : `- ${this.fileLink(page, e.to)}`,
+        ),
         "",
       );
     }
-    if (importers.length) lines.push("**Lo importan:**", "", ...importers.map((e) => `- ${this.fileLink(page, e.from)}`), "");
+    if (importers.length)
+      lines.push("**Lo importan:**", "", ...importers.map((e) => `- ${this.fileLink(page, e.from)}`), "");
     return lines.join("\n");
   }
 
@@ -305,7 +308,10 @@ class DocsWriter {
       "",
       ...[...folders]
         .sort((a, b) => b[1] - a[1])
-        .map(([dir, n]) => `- [\`${dir === "." ? "(raíz)" : `${dir}/`}\`](${rel(page, folderPage(dir))}) (${n} importaciones)`),
+        .map(
+          ([dir, n]) =>
+            `- [\`${dir === "." ? "(raíz)" : `${dir}/`}\`](${rel(page, folderPage(dir))}) (${n} importaciones)`,
+        ),
       "",
     ];
   }

@@ -100,7 +100,10 @@ describe("resúmenes automáticos (sin IA)", () => {
   });
 
   test("dice quién lo importa", () => {
-    assert.match(automaticSummary(graph, "src/util.js", "export const x = 1;")!, /Lo importan 1 archivos: `src\/main\.ts`/);
+    assert.match(
+      automaticSummary(graph, "src/util.js", "export const x = 1;")!,
+      /Lo importan 1 archivos: `src\/main\.ts`/,
+    );
   });
 
   test("los archivos con lógica sí van a la IA", () => {
@@ -121,7 +124,12 @@ describe("prompt de flujo", () => {
     const prompt = flow();
     assert.match(prompt, /Función de partida: src\/main\.ts#main/);
     assert.match(prompt, /- src\/main\.ts#main \[function, src\/main\.ts:4\]\n {2}- /);
-    for (const id of ["src/shapes.ts#Circle", "src/shapes.ts#Base.describe", "src/shapes.ts#format", "src/util.js#sum"]) {
+    for (const id of [
+      "src/shapes.ts#Circle",
+      "src/shapes.ts#Base.describe",
+      "src/shapes.ts#format",
+      "src/util.js#sum",
+    ]) {
       assert.ok(prompt.includes(`- ${id} [`), `el árbol incluye ${id}`);
     }
     assert.match(prompt, /<function id="src\/shapes\.ts#format">\nexport const format/);

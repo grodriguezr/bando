@@ -10,8 +10,7 @@ export const DEFAULT_LOCAL_URL = "http://localhost:1234/v1";
  * OpenAI-compatible server (LM Studio, Ollama, llama.cpp…).
  */
 export type SummaryProvider =
-  | { kind: "anthropic"; client?: Anthropic }
-  | { kind: "local"; baseUrl?: string; model?: string };
+  { kind: "anthropic"; client?: Anthropic } | { kind: "local"; baseUrl?: string; model?: string };
 
 export interface GenerateOptions {
   /** Defaults to Claude, resolving credentials from the environment (ANTHROPIC_API_KEY, `ant auth login`…). */

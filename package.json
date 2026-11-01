@@ -10,10 +10,13 @@
     "analyze": "node packages/cli/dist/index.js analyze",
     "desktop": "tsc -b packages/core && npm run dev -w @bando/desktop",
     "typecheck": "tsc -b packages/core packages/cli && tsc -p packages/desktop/tsconfig.json",
-    "test": "tsc -b packages/core && npm test -w @bando/core"
+    "test": "tsc -b packages/core && npm test -w @bando/core",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
+    "prettier": "^3.9.10",
     "typescript": "~5.9.3"
   }
 }

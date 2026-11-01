@@ -120,7 +120,9 @@ export function SummaryPanel({ target, title = "Resumen con IA", resolveLink, re
           <Markdown text={state.text} resolveLink={resolveLink} />
         ) : (
           <p className="muted small">
-            {settings?.provider === "local" ? "El modelo local está trabajando (puede tardar un par de minutos)…" : "Pensando…"}
+            {settings?.provider === "local"
+              ? "El modelo local está trabajando (puede tardar un par de minutos)…"
+              : "Pensando…"}
           </p>
         ))}
       {state.status === "done" && (

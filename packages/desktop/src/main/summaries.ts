@@ -2,7 +2,12 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { app } from "electron";
 import type { CodeGraph } from "@bando/core/types";
-import { DEFAULT_LOCAL_URL, describeSummaryError, type SummaryProvider, type SummaryTarget } from "@bando/core/summarize";
+import {
+  DEFAULT_LOCAL_URL,
+  describeSummaryError,
+  type SummaryProvider,
+  type SummaryTarget,
+} from "@bando/core/summarize";
 import { defaultConcurrency, SummaryStore, type SummarizeAllEvent } from "@bando/core/summary-store";
 import { exportDocs, type ExportDocsResult } from "@bando/core/docs";
 
@@ -108,7 +113,8 @@ export class SummaryService {
     const onEvent = (event: SummarizeAllEvent) => {
       if (!this.job.running) return;
       if (event.type === "start") this.setJob({ ...this.job, total: event.total });
-      else if (event.type === "progress") this.setJob({ ...this.job, done: event.done, current: event.target, failed: event.failed });
+      else if (event.type === "progress")
+        this.setJob({ ...this.job, done: event.done, current: event.target, failed: event.failed });
       else if (event.type === "summarized") {
         if (event.error) lastError = event.error;
         else this.events.summarized(event.target);
@@ -125,7 +131,10 @@ export class SummaryService {
         shouldStop: () => this.stopRequested,
       })
       .catch((error: unknown) => {
-        this.setJob({ running: false, last: { done: 0, total: 0, failed: 1, stopped: true, error: describeSummaryError(error) } });
+        this.setJob({
+          running: false,
+          last: { done: 0, total: 0, failed: 1, stopped: true, error: describeSummaryError(error) },
+        });
       });
     return this.job;
   }

@@ -28,7 +28,10 @@ describe("proyecto básico", () => {
   test("usa el tsconfig del proyecto e incluye archivos JS", () => {
     assert.equal(graph.tsconfig, "tsconfig.json");
     assert.deepEqual(
-      graph.nodes.filter((n) => n.kind === "file").map((n) => n.id).sort(),
+      graph.nodes
+        .filter((n) => n.kind === "file")
+        .map((n) => n.id)
+        .sort(),
       ["src/main.ts", "src/shapes.ts", "src/util.js"],
     );
   });
@@ -97,7 +100,9 @@ describe("monorepo", () => {
   const app = "packages/app/src/main.ts";
 
   test("detecta los paquetes del workspace", () => {
-    const names = findWorkspacePackages(fixture("monorepo")).map((p) => p.name).sort();
+    const names = findWorkspacePackages(fixture("monorepo"))
+      .map((p) => p.name)
+      .sort();
     assert.deepEqual(names, ["@demo/app", "@demo/lib"]);
   });
 
@@ -119,7 +124,10 @@ describe("monorepo", () => {
       fs.writeFileSync(path.join(root, "pnpm-workspace.yaml"), "packages:\n  - 'apps/*'\n  - \"!apps/ignored\"\n");
       fs.mkdirSync(path.join(root, "apps", "web"), { recursive: true });
       fs.writeFileSync(path.join(root, "apps", "web", "package.json"), '{ "name": "web" }');
-      assert.deepEqual(findWorkspacePackages(root).map((p) => p.name), ["web"]);
+      assert.deepEqual(
+        findWorkspacePackages(root).map((p) => p.name),
+        ["web"],
+      );
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

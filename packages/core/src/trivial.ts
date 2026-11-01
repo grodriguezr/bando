@@ -28,7 +28,12 @@ export function automaticSummary(graph: CodeGraph, fileId: string, source: strin
   const exported = exportedNames(sf);
   if (exported.length) {
     const shown = exported.slice(0, 40).map((name) => `\`${name}\``);
-    lines.push("## Contenido", "", `Exporta: ${shown.join(", ")}${exported.length > 40 ? ` y ${exported.length - 40} más` : ""}.`, "");
+    lines.push(
+      "## Contenido",
+      "",
+      `Exporta: ${shown.join(", ")}${exported.length > 40 ? ` y ${exported.length - 40} más` : ""}.`,
+      "",
+    );
   }
   const defaultObject = defaultExportedObject(sf);
   if (defaultObject !== undefined) lines.push(`Exporta por defecto un objeto con ${defaultObject} claves.`, "");
@@ -52,11 +57,22 @@ function classify(sf: ts.SourceFile): TrivialKind | undefined {
   const visit = (node: ts.Node): void => {
     if (hasLogic) return;
     if (
-      ts.isFunctionLike(node) && !ts.isFunctionTypeNode(node) && !ts.isMethodSignature(node) && !ts.isCallSignatureDeclaration(node) &&
-      !ts.isConstructSignatureDeclaration(node) && !ts.isIndexSignatureDeclaration(node) && !ts.isConstructorTypeNode(node)
+      ts.isFunctionLike(node) &&
+      !ts.isFunctionTypeNode(node) &&
+      !ts.isMethodSignature(node) &&
+      !ts.isCallSignatureDeclaration(node) &&
+      !ts.isConstructSignatureDeclaration(node) &&
+      !ts.isIndexSignatureDeclaration(node) &&
+      !ts.isConstructorTypeNode(node)
     ) {
       hasLogic = true;
-    } else if (ts.isCallExpression(node) || ts.isNewExpression(node) || ts.isClassLike(node) || ts.isJsxElement(node) || ts.isJsxSelfClosingElement(node)) {
+    } else if (
+      ts.isCallExpression(node) ||
+      ts.isNewExpression(node) ||
+      ts.isClassLike(node) ||
+      ts.isJsxElement(node) ||
+      ts.isJsxSelfClosingElement(node)
+    ) {
       hasLogic = true;
     } else {
       ts.forEachChild(node, visit);
@@ -75,7 +91,8 @@ function classify(sf: ts.SourceFile): TrivialKind | undefined {
 function exportedNames(sf: ts.SourceFile): string[] {
   const names: string[] = [];
   for (const statement of sf.statements) {
-    const exported = ts.canHaveModifiers(statement) && ts.getModifiers(statement)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+    const exported =
+      ts.canHaveModifiers(statement) && ts.getModifiers(statement)?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
     if (ts.isExportDeclaration(statement)) {
       if (statement.exportClause && ts.isNamedExports(statement.exportClause)) {
         names.push(...statement.exportClause.elements.map((e) => e.name.text));
@@ -85,9 +102,12 @@ function exportedNames(sf: ts.SourceFile): string[] {
     } else if (!exported) {
       continue;
     } else if (ts.isVariableStatement(statement)) {
-      for (const decl of statement.declarationList.declarations) if (ts.isIdentifier(decl.name)) names.push(decl.name.text);
+      for (const decl of statement.declarationList.declarations)
+        if (ts.isIdentifier(decl.name)) names.push(decl.name.text);
     } else if (
-      (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement) || ts.isEnumDeclaration(statement)) &&
+      (ts.isInterfaceDeclaration(statement) ||
+        ts.isTypeAliasDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
       statement.name
     ) {
       names.push(statement.name.text);
@@ -101,7 +121,8 @@ function defaultExportedObject(sf: ts.SourceFile): number | undefined {
   for (const statement of sf.statements) {
     if (!ts.isExportAssignment(statement)) continue;
     let expr = statement.expression;
-    while (ts.isAsExpression(expr) || ts.isSatisfiesExpression(expr) || ts.isParenthesizedExpression(expr)) expr = expr.expression;
+    while (ts.isAsExpression(expr) || ts.isSatisfiesExpression(expr) || ts.isParenthesizedExpression(expr))
+      expr = expr.expression;
     if (ts.isObjectLiteralExpression(expr)) return expr.properties.length;
   }
   return undefined;

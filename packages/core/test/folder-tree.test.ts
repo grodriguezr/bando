@@ -38,10 +38,14 @@ describe("FolderTree", () => {
     // Las carpetas de un solo elemento se abren gratis (utils): cambian un nodo por otro.
     assert.deepEqual([...tree.defaultExpanded(5)].sort(), [ROOT, "src", "src/utils"]);
     // Con más margen abre primero las más grandes: pages (+1 → 6), api (+1 → 7); clientes ya no cabe.
-    assert.deepEqual(
-      [...tree.defaultExpanded(7)].sort(),
-      [ROOT, "src", "src/api", "src/pages", "src/pages/tickets", "src/utils"],
-    );
+    assert.deepEqual([...tree.defaultExpanded(7)].sort(), [
+      ROOT,
+      "src",
+      "src/api",
+      "src/pages",
+      "src/pages/tickets",
+      "src/utils",
+    ]);
     assert.equal(tree.defaultExpanded(100).size, tree.folders.size, "un proyecto pequeño se abre entero");
   });
 

@@ -1,10 +1,4 @@
-export type NodeKind =
-  | "file"
-  | "class"
-  | "interface"
-  | "function"
-  | "method"
-  | "package";
+export type NodeKind = "file" | "class" | "interface" | "function" | "method" | "package";
 
 export type EdgeKind =
   | "contains" // file → class/function, class → method
@@ -46,7 +40,7 @@ export interface GraphStats {
   resolvedCalls: number;
   /** Calls into node_modules or the standard library. */
   externalCalls: number;
-  /** Calls whose target could not be determined statically (dynamic dispatch, callbacks, any). */ 
+  /** Calls whose target could not be determined statically (dynamic dispatch, callbacks, any). */
   unresolvedCalls: number;
   durationMs: number;
 }

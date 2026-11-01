@@ -1,1 +1,7 @@
-{ "name": "@demo/app", "type": "module", "dependencies": { "@demo/lib": "*" } }
+{
+  "name": "@demo/app",
+  "type": "module",
+  "dependencies": {
+    "@demo/lib": "*"
+  }
+}

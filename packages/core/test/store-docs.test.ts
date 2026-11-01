@@ -39,7 +39,11 @@ describe("SummaryStore", () => {
 
     assert.equal(store.cached(graph, file, "local"), undefined);
     await store.generate(graph, file, { provider: local });
-    assert.deepEqual(store.cached(graph, file, "local"), { text: "## Propósito\nResumen de file:src/util.js.", model: "local:fake", stale: false });
+    assert.deepEqual(store.cached(graph, file, "local"), {
+      text: "## Propósito\nResumen de file:src/util.js.",
+      model: "local:fake",
+      stale: false,
+    });
     assert.equal(store.cached(graph, file, "anthropic"), undefined, "cada proveedor tiene su caché");
 
     fs.appendFileSync(path.join(root, "src/util.js"), "\n// cambio\n");
@@ -49,7 +53,11 @@ describe("SummaryStore", () => {
   test("otro proceso ve lo que se guardó (caché compartida en disco)", async () => {
     const graph = analyzeProject(fixture("basic"));
     const cacheFile = path.join(tmp, "shared.json");
-    await new SummaryStore(cacheFile, fakeGenerator().generate).generate(graph, { kind: "project" }, { provider: local });
+    await new SummaryStore(cacheFile, fakeGenerator().generate).generate(
+      graph,
+      { kind: "project" },
+      { provider: local },
+    );
     const other = new SummaryStore(cacheFile);
     assert.equal(other.known(graph.root, "local").get("project"), "## Propósito\nResumen de project.");
   });
@@ -102,7 +110,10 @@ describe("SummaryStore", () => {
     assert.match((errors[0] as { error: string }).error, /servidor caído/);
     assert.deepEqual(events.at(-1), { type: "finished", done: 6, total: 6, failed: 1, stopped: false });
 
-    const broken = { calls: [] as string[], generate: (async () => Promise.reject(new Error("sin conexión"))) as never };
+    const broken = {
+      calls: [] as string[],
+      generate: (async () => Promise.reject(new Error("sin conexión"))) as never,
+    };
     const events2: SummarizeAllEvent[] = [];
     await new SummaryStore(path.join(tmp, "broken.json"), broken.generate).summarizeAll(graph, {
       provider: local,
@@ -152,7 +163,10 @@ describe("exportDocs", () => {
   const graph = analyzeProject(fixture("monorepo"));
   const out = path.join(tmp, "docs");
   const summaries = new Map([
-    ["project", "# Guía de demo\n\n## De qué se trata\nUna app que suma. Empieza por `packages/app/src/main.ts` y `math.ts`; ignora `src/fake.ts`."],
+    [
+      "project",
+      "# Guía de demo\n\n## De qué se trata\nUna app que suma. Empieza por `packages/app/src/main.ts` y `math.ts`; ignora `src/fake.ts`.",
+    ],
     ["folder:packages/lib/src", "## Propósito\nBiblioteca de matemáticas. Más detalle aquí."],
     ["file:packages/lib/src/math.ts", "## Propósito\nSuma números."],
   ]);
@@ -175,7 +189,10 @@ describe("exportDocs", () => {
     assert.match(index, /\[`math\.ts`\]\(code\/packages\/lib\/src\/math\.ts\.md\)/, "nombres únicos también enlazan");
     assert.match(index, /⚠️ .*`src\/fake\.ts`/, "advierte de archivos inventados");
     assert.match(index, /```mermaid\nflowchart LR[\s\S]*-->\|2\|/);
-    assert.match(index, /\| \[`packages\/lib\/src\/`\]\(code\/packages\/lib\/src\/README\.md\) \| 2 \| Biblioteca de matemáticas\. \|/);
+    assert.match(
+      index,
+      /\| \[`packages\/lib\/src\/`\]\(code\/packages\/lib\/src\/README\.md\) \| 2 \| Biblioteca de matemáticas\. \|/,
+    );
   });
 
   test("la página de archivo enlaza al código, a los llamadores y a su carpeta", () => {

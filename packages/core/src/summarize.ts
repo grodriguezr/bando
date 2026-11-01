@@ -82,7 +82,8 @@ export function buildSummaryPrompt(
     }
     return { system: FILE_SYSTEM_PROMPT, prompt: buildModulePrompt(graph, target.id, source) };
   }
-  if (target.kind === "folder") return { system: FOLDER_SYSTEM_PROMPT, prompt: folderPrompt(index, target.id, summaries) };
+  if (target.kind === "folder")
+    return { system: FOLDER_SYSTEM_PROMPT, prompt: folderPrompt(index, target.id, summaries) };
   if (target.kind === "flow") {
     return { system: FLOW_SYSTEM_PROMPT, prompt: buildFlowPrompt(index, target.id, context.sourceBudget) };
   }
@@ -325,7 +326,8 @@ function projectPrompt(index: GraphIndex, summaries: ReadonlyMap<string, string>
           if (!purpose) missing++;
           const names = inDir.map((f) => f.name);
           const limit = listAllFiles ? Infinity : 8;
-          const list = names.slice(0, limit).join(", ") + (names.length > limit ? `, … (+${names.length - limit})` : "");
+          const list =
+            names.slice(0, limit).join(", ") + (names.length > limit ? `, … (+${names.length - limit})` : "");
           return [`- ${dir} (${inDir.length} archivos)`, purpose && `  Propósito: ${purpose}`, `  Archivos: ${list}`]
             .filter(Boolean)
             .join("\n");
@@ -340,14 +342,17 @@ function projectPrompt(index: GraphIndex, summaries: ReadonlyMap<string, string>
   for (const edge of graph.edges) {
     if (edge.kind !== "imports") continue;
     if (edge.to.startsWith("pkg:")) increment(packages, edge.to.slice(4));
-    else if (folderOf(edge.from) !== folderOf(edge.to)) increment(folderDeps, `${folderOf(edge.from)} → ${folderOf(edge.to)}`);
+    else if (folderOf(edge.from) !== folderOf(edge.to))
+      increment(folderDeps, `${folderOf(edge.from)} → ${folderOf(edge.to)}`);
   }
   if (folderDeps.size) sections.push(`Dependencias entre carpetas (importaciones):\n${countList(folderDeps, 40)}`);
   if (packages.size) sections.push(`Dependencias externas (archivos que las usan):\n${countList(packages, 20)}`);
 
   const entries = index.entryPoints().slice(0, 25);
   if (entries.length) {
-    sections.push(`Puntos de entrada (exportados y sin llamadores internos):\n${entries.map((n) => `- ${n.id}`).join("\n")}`);
+    sections.push(
+      `Puntos de entrada (exportados y sin llamadores internos):\n${entries.map((n) => `- ${n.id}`).join("\n")}`,
+    );
   }
   const mostCalled = index.mostCalled(15);
   if (mostCalled.length) {
@@ -358,7 +363,9 @@ function projectPrompt(index: GraphIndex, summaries: ReadonlyMap<string, string>
   const hubs = new Map(files.map((f) => [f.id, index.incoming(f.id, "imports").length]));
   sections.push(`Archivos más importados:\n${countList(new Map([...hubs].filter(([, n]) => n > 0)), 10)}`);
 
-  const readmeName = ["README.md", "readme.md", "README", "Readme.md"].find((f) => fs.existsSync(path.join(graph.root, f)));
+  const readmeName = ["README.md", "readme.md", "README", "Readme.md"].find((f) =>
+    fs.existsSync(path.join(graph.root, f)),
+  );
   const readme = readmeName && readText(path.join(graph.root, readmeName));
   if (readme) {
     const cut = readme.length > MAX_README_CHARS;

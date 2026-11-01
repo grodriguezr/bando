@@ -215,10 +215,7 @@ class GraphBuilder {
       } else if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
         // Only capitalized tags are components; lowercase ones are intrinsic HTML elements.
         if (/^[A-Z]/.test(node.tagName.getText(sf))) this.addCall(ownerId, node.tagName, line);
-      } else if (
-        (ts.isClassLike(node) || ts.isInterfaceDeclaration(node)) &&
-        this.idByDecl.has(node)
-      ) {
+      } else if ((ts.isClassLike(node) || ts.isInterfaceDeclaration(node)) && this.idByDecl.has(node)) {
         this.addHeritage(node, line);
       }
 
@@ -438,7 +435,11 @@ function objectOwner(node: ts.Node): (ts.VariableDeclaration & { name: ts.Identi
     return undefined;
   }
   let expr: ts.Node = node.parent;
-  while (ts.isParenthesizedExpression(expr.parent) || ts.isAsExpression(expr.parent) || ts.isSatisfiesExpression(expr.parent)) {
+  while (
+    ts.isParenthesizedExpression(expr.parent) ||
+    ts.isAsExpression(expr.parent) ||
+    ts.isSatisfiesExpression(expr.parent)
+  ) {
     expr = expr.parent;
   }
   const decl = expr.parent;

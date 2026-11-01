@@ -36,7 +36,10 @@ const STYLE: StylesheetJson = [
   { selector: 'node[kind="package"]', style: { shape: "round-rectangle" } },
   { selector: 'node[kind="interface"]', style: { shape: "diamond" } },
   { selector: 'node[kind="class"]', style: { shape: "hexagon" } },
-  { selector: "node[weight]", style: { width: "mapData(weight, 0, 25, 14, 48)", height: "mapData(weight, 0, 25, 14, 48)" } },
+  {
+    selector: "node[weight]",
+    style: { width: "mapData(weight, 0, 25, 14, 48)", height: "mapData(weight, 0, 25, 14, 48)" },
+  },
   {
     selector: 'node[kind="dir"]',
     style: {

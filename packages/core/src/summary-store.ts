@@ -66,7 +66,8 @@ export function defaultDataDir(): string {
   if (process.env.BANDO_DATA_DIR) return process.env.BANDO_DATA_DIR;
   const home = os.homedir();
   if (process.platform === "darwin") return path.join(home, "Library", "Application Support", "Bando");
-  if (process.platform === "win32") return path.join(process.env.APPDATA ?? path.join(home, "AppData", "Roaming"), "Bando");
+  if (process.platform === "win32")
+    return path.join(process.env.APPDATA ?? path.join(home, "AppData", "Roaming"), "Bando");
   return path.join(process.env.XDG_CONFIG_HOME ?? path.join(home, ".config"), "bando");
 }
 
@@ -88,7 +89,10 @@ export class SummaryStore {
 
   /** What a request is built from: the summaries it builds on and how much code fits the provider. */
   private context(root: string, provider: SummaryProvider["kind"]) {
-    return { summaries: this.known(root, provider), sourceBudget: provider === "local" ? LOCAL_SOURCE_BUDGET : undefined };
+    return {
+      summaries: this.known(root, provider),
+      sourceBudget: provider === "local" ? LOCAL_SOURCE_BUDGET : undefined,
+    };
   }
 
   /** Every summary of this project and provider, keyed by `summaryKey`. */
@@ -132,7 +136,12 @@ export class SummaryStore {
       const context = this.context(graph.root, options.provider.kind);
       const request = buildSummaryPrompt(graph, target, context);
       const result = await this.generator(graph, target, { ...options, ...context });
-      this.save(k, { hash: hashOf(request), text: result.text, model: result.model, createdAt: new Date().toISOString() });
+      this.save(k, {
+        hash: hashOf(request),
+        text: result.text,
+        model: result.model,
+        createdAt: new Date().toISOString(),
+      });
       return result;
     })().finally(() => this.inFlight.delete(k));
     this.inFlight.set(k, task);
@@ -246,7 +255,5 @@ function cacheKey(provider: SummaryProvider["kind"], root: string, target: Summa
 }
 
 function hashOf(request: { system: string; prompt: string }): string {
-  return createHash("sha256")
-    .update(`${SUMMARY_PROMPT_VERSION}\n${request.system}\n${request.prompt}`)
-    .digest("hex");
+  return createHash("sha256").update(`${SUMMARY_PROMPT_VERSION}\n${request.system}\n${request.prompt}`).digest("hex");
 }
