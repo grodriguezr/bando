@@ -5,6 +5,8 @@ import type { ExportDocsResult } from "@bando/core/docs";
 
 export type SummaryResult = { text: string; model: string; stale?: boolean } | { error: string };
 
+export type AskResult = { text: string; model: string; sources: string[] } | { error: string };
+
 /** State of the "summarize everything" job. */
 export type JobStatus =
   | { running: false; last?: { done: number; total: number; failed: number; stopped: boolean; error?: string } }
@@ -48,6 +50,9 @@ declare global {
       /** `key` is the target's summaryKey: "file:<id>", "folder:<dir>" or "project". */
       /** Asks for a folder and writes the Markdown docs there; undefined if cancelled. */
       exportDocs(): Promise<ExportDocsResult | undefined>;
+      /** Answers a question about the open project; the text streams through onAskDelta with the same id. */
+      ask(id: string, question: string): Promise<AskResult>;
+      onAskDelta(callback: (delta: { id: string; text: string }) => void): () => void;
       getJobStatus(): Promise<JobStatus>;
       /** Summarizes every file, then every folder, then the guide, in the background. */
       startJob(): Promise<JobStatus>;

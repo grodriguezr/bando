@@ -39,6 +39,10 @@
     "./folder-tree": {
       "types": "./dist/folder-tree.d.ts",
       "default": "./dist/folder-tree.js"
+    },
+    "./ask": {
+      "types": "./dist/ask.d.ts",
+      "default": "./dist/ask.js"
     }
   },
   "scripts": {

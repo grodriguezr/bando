@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { analyzeProject, GraphIndex, type CodeGraph, type CodeNode } from "@bando/core";
+import { askProject, LOCAL_ASK_BUDGET } from "@bando/core/ask";
 import { exportDocs } from "@bando/core/docs";
 import { defaultConcurrency, SummaryStore } from "@bando/core/summary-store";
 import {
@@ -20,6 +21,7 @@ const USAGE = `Uso:
   bando mermaid [-g graph.json] [--packages]                     Diagrama Mermaid de dependencias entre archivos
   bando summarize <archivo|carpeta> [-g graph.json]              Resume un archivo o carpeta con Claude (requiere ANTHROPIC_API_KEY)
   bando guide [-g graph.json]                                    Guía "por dónde empezar" para todo el proyecto
+  bando ask "<pregunta>" [-g graph.json]                         Responde una pregunta sobre el proyecto
   bando explain <función> [-g graph.json]                        Explica paso a paso qué ocurre cuando se ejecuta una función
   bando summarize-all [-g graph.json] [-j N]                     Resume archivos, carpetas y la guía (retoma si se interrumpe)
   bando docs [-o docs] [-g graph.json]                           Exporta la documentación en Markdown con los resúmenes guardados
@@ -58,6 +60,7 @@ async function main(argv: string[]): Promise<void> {
     return summarize(graph, resolveTarget(graph, arg), provider);
   }
   if (command === "guide") return summarize(loadGraph(values.graph), { kind: "project" }, provider);
+  if (command === "ask" && arg) return ask(loadGraph(values.graph), positionals.slice(1).join(" "), provider);
   if (command === "explain" && arg) {
     const graph = loadGraph(values.graph);
     const node = findSymbol(graph, arg);
@@ -268,6 +271,28 @@ function docs(graph: CodeGraph, graphFile: string, outDir: string, provider: Sum
     console.log(`  Para completarla: bando summarize-all -g ${graphFile}${local} y vuelve a exportar.`);
   }
   console.log(`  Ábrela en: ${path.join(result.outDir, "README.md")}`);
+}
+
+async function ask(graph: CodeGraph, question: string, provider: SummaryProvider): Promise<void> {
+  try {
+    const summaries = new SummaryStore().known(graph.root, provider.kind);
+    const answer = await askProject(graph, question, {
+      provider,
+      summaries,
+      budget: provider.kind === "local" ? LOCAL_ASK_BUDGET : undefined,
+      onText: (delta) => process.stdout.write(delta),
+    });
+    console.error(
+      `\n\n· Basado en: ${answer.sources.join(", ") || "nada (la búsqueda no encontró partes relacionadas)"}`,
+    );
+    console.error(
+      `· Generado con ${answer.model}${summaries.size ? "" : " (sin resúmenes: bando summarize-all mejora las respuestas)"}`,
+    );
+    warnUnknownReferences(graph, answer.text);
+  } catch (error) {
+    console.error(`\n${describeSummaryError(error)}`);
+    process.exitCode = 1;
+  }
 }
 
 function warnUnknownReferences(graph: CodeGraph, text: string): void {

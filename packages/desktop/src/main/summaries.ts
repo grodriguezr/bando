@@ -10,6 +10,7 @@ import {
 } from "@bando/core/summarize";
 import { defaultConcurrency, SummaryStore, type SummarizeAllEvent } from "@bando/core/summary-store";
 import { exportDocs, type ExportDocsResult } from "@bando/core/docs";
+import { askProject, LOCAL_ASK_BUDGET } from "@bando/core/ask";
 
 export type ProviderKind = SummaryProvider["kind"];
 
@@ -20,6 +21,8 @@ export interface AiSettings {
   /** Empty: use the first chat model the server offers. */
   localModel: string;
 }
+
+export type AskResult = { text: string; model: string; sources: string[] } | { error: string };
 
 export type SummaryResult = { text: string; model: string; stale?: boolean } | { error: string };
 
@@ -96,6 +99,22 @@ export class SummaryService {
   async exportDocs(graph: CodeGraph, outDir: string): Promise<ExportDocsResult> {
     const { provider } = await this.settings();
     return exportDocs(graph, { outDir, summaries: this.store.known(graph.root, provider) });
+  }
+
+  /** Answers a question about the project, using every stored summary of the current provider. */
+  async ask(graph: CodeGraph, question: string, onText: (delta: string) => void): Promise<AskResult> {
+    try {
+      const provider = await this.provider();
+      const answer = await askProject(graph, question, {
+        provider,
+        summaries: this.store.known(graph.root, provider.kind),
+        budget: provider.kind === "local" ? LOCAL_ASK_BUDGET : undefined,
+        onText,
+      });
+      return { text: answer.text, model: answer.model, sources: answer.sources };
+    } catch (error) {
+      return { error: describeSummaryError(error) };
+    }
   }
 
   jobStatus(): JobStatus {

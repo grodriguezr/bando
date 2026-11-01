@@ -90,6 +90,10 @@ function Overview({ index, onSelect }: { index: GraphIndex; onSelect(id: string)
         <strong>Guía para empezar</strong>
         <span className="muted small">Arquitectura, flujos y qué leer primero, generada con IA</span>
       </button>
+      <button className="guide-button" onClick={() => onSelect("ask")}>
+        <strong>Preguntar al proyecto</strong>
+        <span className="muted small">“¿Dónde se valida…?”, “¿Qué pasa cuando…?”</span>
+      </button>
       <JobCard onSelect={onSelect} />
       <ExportDocs />
       <div className="stats">

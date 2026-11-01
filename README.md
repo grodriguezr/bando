@@ -16,6 +16,8 @@ Bando solo lee el proyecto analizado: nunca lo modifica.
   - Grafo de dependencias por carpetas que se abren y cierran, y grafo de llamadas de cada función.
   - Árbol de archivos, búsqueda, y panel con firma, documentación, relaciones y código.
   - Resúmenes con IA por archivo y carpeta, una **guía para empezar** con el proyecto y la **explicación de flujos**.
+  - **Preguntar al proyecto**: respuestas a preguntas como "¿cómo se suspende un contrato?", basadas en las partes del
+    código relacionadas y con enlaces a ellas.
   - "Resumir todo el proyecto" en segundo plano y exportación de la documentación.
 - **CLI** con las mismas capacidades para la terminal.
 - **Documentación en Markdown** lista para GitHub/GitLab: índice con la guía y un diagrama de la arquitectura, una
@@ -58,6 +60,7 @@ npx bando mermaid > dependencias.mmd                # diagrama de dependencias e
 
 npx bando summarize src/servicios/clientes.ts       # resume un archivo o carpeta con IA
 npx bando explain ClientesService.crear             # explica el flujo de una función
+npx bando ask "¿Cómo se suspende un contrato?"      # responde una pregunta sobre el proyecto
 npx bando guide                                     # guía "por dónde empezar"
 npx bando summarize-all -j 4                        # resume todo (retoma si se interrumpe)
 npx bando docs -o /ruta/de/salida                   # exporta la documentación en Markdown

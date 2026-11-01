@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld("bando", {
   cachedSummary: (target) => ipcRenderer.invoke("summary:cached", target),
   generateSummary: (target) => ipcRenderer.invoke("summary:generate", target),
   exportDocs: () => ipcRenderer.invoke("docs:export"),
+  ask: (id, question) => ipcRenderer.invoke("ask:question", id, question),
+  onAskDelta: (callback) => subscribe("ask:delta", callback),
   getJobStatus: () => ipcRenderer.invoke("job:status"),
   startJob: () => ipcRenderer.invoke("job:start"),
   stopJob: () => ipcRenderer.invoke("job:stop"),

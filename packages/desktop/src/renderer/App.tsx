@@ -4,6 +4,7 @@ import { GraphIndex } from "@bando/core/query";
 import { FolderTree } from "@bando/core/folder-tree";
 import { folderOf, listFolders } from "@bando/core/targets";
 import type { CodeGraph } from "@bando/core/types";
+import { AskPanel, type AskEntry } from "./components/AskPanel";
 import { Details } from "./components/Details";
 import { FolderDetails } from "./components/FolderDetails";
 import { ProjectGuide } from "./components/ProjectGuide";
@@ -39,6 +40,30 @@ export function App() {
   const [depth, setDepth] = useState(1);
 
   useEffect(() => window.bando.onProgress(setProgress), []);
+
+  // Questions asked during this session, kept while navigating the project.
+  const [asks, setAsks] = useState<AskEntry[]>([]);
+  useEffect(
+    () =>
+      window.bando.onAskDelta(({ id, text }) =>
+        setAsks((list) => list.map((e) => (e.id === id ? { ...e, text: e.text + text } : e))),
+      ),
+    [],
+  );
+  const ask = async (question: string) => {
+    const id = `${Date.now()}`;
+    setAsks((list) => [...list, { id, question, status: "running", text: "" }]);
+    const result = await window.bando.ask(id, question);
+    setAsks((list) =>
+      list.map((e) =>
+        e.id !== id
+          ? e
+          : "error" in result
+            ? { ...e, status: "error", error: result.error }
+            : { ...e, status: "done", text: result.text, model: result.model, sources: result.sources },
+      ),
+    );
+  };
   useEffect(() => {
     void window.bando.currentProject().then((current) => current && setGraph((g) => g ?? current));
   }, []);
@@ -161,7 +186,7 @@ export function App() {
   }
 
   return (
-    <div className={`app ${selectedId === "project" ? "wide-details" : ""}`}>
+    <div className={`app ${selectedId === "project" || selectedId === "ask" ? "wide-details" : ""}`}>
       <header className="toolbar">
         <strong className="project" title={graph.root}>
           {graph.root.split(/[\\/]/).pop()}
@@ -238,6 +263,8 @@ export function App() {
 
       {selectedId === "project" ? (
         <ProjectGuide index={index} resolveLink={resolveLink} />
+      ) : selectedId === "ask" ? (
+        <AskPanel index={index} entries={asks} onAsk={ask} onSelect={select} resolveLink={resolveLink} />
       ) : selectedId?.startsWith("dir:") ? (
         <FolderDetails
           key={selectedId}

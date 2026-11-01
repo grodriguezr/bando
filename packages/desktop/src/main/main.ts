@@ -122,6 +122,11 @@ ipcMain.handle("docs:export", async () => {
   return exported;
 });
 
+ipcMain.handle("ask:question", (_event, id: string, question: string) => {
+  if (!currentGraph) return { error: "No hay proyecto abierto" };
+  return summaries.ask(currentGraph, question, (text) => send("ask:delta", { id, text }));
+});
+
 ipcMain.handle("job:status", () => summaries.jobStatus());
 ipcMain.handle("job:start", () => (currentGraph ? summaries.startJob(currentGraph) : summaries.jobStatus()));
 ipcMain.handle("job:stop", () => summaries.stopJob());
