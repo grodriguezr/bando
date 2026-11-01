@@ -125,3 +125,37 @@ describe("monorepo", () => {
     }
   });
 });
+
+describe("patrones de React y servicios", () => {
+  const graph = analyzeProject(fixture("react-like"));
+  const index = new GraphIndex(graph);
+  const page = "src/page.ts";
+  const api = "src/api.ts";
+
+  test("funciones envueltas en useCallback/memo son funciones", () => {
+    const cargar = index.node(`${page}#Page.cargar`);
+    assert.equal(cargar?.kind, "function");
+    assert.equal(cargar?.signature, "cargar(): Promise<void>");
+    assertEdge(graph, `${page}#Page`, `${page}#Page.cargar`, "calls");
+  });
+
+  test("las funciones de objetos de servicios se declaran con el nombre del objeto", () => {
+    const listar = index.node(`${api}#usuariosApi.listar`);
+    assert.equal(listar?.kind, "function");
+    assert.equal(listar?.exported, true, "se exporta a través del objeto");
+    assert.equal(index.node(`${api}#usuariosApi.crear`)?.kind, "function");
+    assertEdge(graph, `${page}#Page.cargar`, `${api}#usuariosApi.listar`, "calls");
+    assertEdge(graph, `${page}#Page`, `${api}#usuariosApi.crear`, "calls");
+    assertEdge(graph, `${api}#usuariosApi.listar`, `${api}#http.get`, "calls");
+  });
+
+  test("las variables que guardan funciones se resuelven por su tipo", () => {
+    // setNombre viene de una función implementada en el proyecto.
+    assertEdge(graph, `${page}#Page.cargar`, "src/hooks.ts#useStateLike.set", "calls");
+  });
+
+  test("las de librerías cuentan como externas y lo dinámico queda sin resolver", () => {
+    assert.ok(!edge(graph, `${page}#Page`, `${page}#Page`, "calls"), "no inventa una llamada recursiva");
+    assert.equal(graph.stats.unresolvedCalls, 1, "solo elegir() queda sin resolver");
+  });
+});

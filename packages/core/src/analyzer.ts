@@ -156,7 +156,9 @@ class GraphBuilder {
     const exported =
       info.kind === "method"
         ? Boolean(parent?.exported) && !isPrivate(node)
-        : this.exportedDecls.has(node) || this.exportedDecls.has(info.declaration);
+        : this.exportedDecls.has(node) ||
+          this.exportedDecls.has(info.declaration) ||
+          (info.exportedVia !== undefined && this.exportedDecls.has(info.exportedVia));
 
     this.addNode({
       id,
@@ -221,7 +223,7 @@ class GraphBuilder {
   }
 
   private addCall(ownerId: string, callee: ts.Node, line: number): void {
-    const target = callee.kind === ts.SyntaxKind.ImportKeyword ? undefined : this.resolveTarget(callee);
+    const target = callee.kind === ts.SyntaxKind.ImportKeyword ? undefined : this.resolveTarget(callee, ownerId);
     if (target === "external") this.callStats.externalCalls++;
     else if (target) {
       this.callStats.resolvedCalls++;
@@ -266,7 +268,7 @@ class GraphBuilder {
   }
 
   /** Maps an expression (callee, JSX tag, heritage clause) to a graph node id. */
-  private resolveTarget(expr: ts.Node): string | "external" | undefined {
+  private resolveTarget(expr: ts.Node, ownerId?: string): string | "external" | undefined {
     const location = ts.isPropertyAccessExpression(expr) ? expr.name : expr;
     const symbol = this.checker.getSymbolAtLocation(location);
     if (!symbol) return undefined;
@@ -277,7 +279,34 @@ class GraphBuilder {
       if (id) return id;
     }
     const outside = declarations.some((d) => !isProjectFile(this.root, d.getSourceFile().fileName));
-    return outside ? "external" : undefined;
+    if (outside) return "external";
+    // A variable holding a function (`const { t } = useTranslation()`, `const [x, setX] = useState()`,
+    // a prop, a callback): follow its type to where the function is implemented.
+    return this.resolveByType(location, ownerId);
+  }
+
+  /**
+   * Resolves a call through the callee's type: signatures implemented outside the project count as
+   * external; ones implemented in it resolve to the declared function that contains the implementation.
+   * Signatures that only exist as types (props, interfaces) stay unresolved: the implementation is
+   * decided at runtime.
+   */
+  private resolveByType(location: ts.Node, ownerId: string | undefined): string | "external" | undefined {
+    const type = this.checker.getTypeAtLocation(location);
+    for (const signature of [...type.getCallSignatures(), ...type.getConstructSignatures()]) {
+      const decl = signature.declaration;
+      if (!decl) continue;
+      if (!isProjectFile(this.root, decl.getSourceFile().fileName)) return "external";
+      if (!isImplementation(decl)) continue;
+      for (let node: ts.Node = decl; !ts.isSourceFile(node); node = node.parent) {
+        const id = this.idByDecl.get(node);
+        if (!id) continue;
+        // An anonymous function defined inside the caller itself says nothing about what runs.
+        if (id === ownerId && node !== decl) return undefined;
+        return id;
+      }
+    }
+    return undefined;
   }
 
   private resolveAlias(symbol: ts.Symbol): ts.Symbol {
@@ -324,9 +353,25 @@ interface DeclarationInfo {
   declaration: ts.Declaration;
   /** The function or class expression inside `declaration`, when it differs from it. */
   inner?: ts.SignatureDeclaration | ts.ClassExpression;
+  /** For functions inside an exported object (`export const api = { listar() {} }`), the object's declaration. */
+  exportedVia?: ts.Declaration;
 }
 
+/** Calls that wrap a function without changing what it does: `const load = useCallback(async () => …, [])`. */
+const FUNCTION_WRAPPERS = new Set(["useCallback", "useEffectEvent", "useEvent", "memo", "forwardRef", "observer"]);
+
 function describeDeclaration(node: ts.Node): DeclarationInfo | undefined {
+  // Functions of an object assigned to a variable, the usual shape of API services: `usuariosApi.listar`.
+  const owner = objectOwner(node);
+  if (owner) {
+    const name = `${owner.name.text}.${propertyName((node as ts.PropertyAssignment | ts.MethodDeclaration).name)}`;
+    if (ts.isPropertyAssignment(node) && isFunctionExpression(node.initializer)) {
+      return { kind: "function", name, declaration: node, inner: node.initializer, exportedVia: owner };
+    }
+    if (ts.isMethodDeclaration(node) && node.body) {
+      return { kind: "function", name, declaration: node, inner: node, exportedVia: owner };
+    }
+  }
   if (ts.isFunctionDeclaration(node) && node.body) {
     return { kind: "function", name: node.name?.text ?? "default", declaration: node, inner: node };
   }
@@ -353,8 +398,39 @@ function describeDeclaration(node: ts.Node): DeclarationInfo | undefined {
     if (ts.isClassExpression(node.initializer)) {
       return { kind: "class", name: node.name.text, declaration: node, inner: node.initializer };
     }
+    const wrapped = wrappedFunction(node.initializer);
+    if (wrapped) return { kind: "function", name: node.name.text, declaration: node, inner: wrapped };
   }
   return undefined;
+}
+
+/** The function inside `useCallback(fn)`, `memo(forwardRef(fn))`, `React.memo(fn)`… */
+function wrappedFunction(expr: ts.Expression): ts.ArrowFunction | ts.FunctionExpression | undefined {
+  if (!ts.isCallExpression(expr)) return undefined;
+  const callee = expr.expression;
+  const name = ts.isIdentifier(callee) ? callee.text : ts.isPropertyAccessExpression(callee) ? callee.name.text : "";
+  const [first] = expr.arguments;
+  if (!FUNCTION_WRAPPERS.has(name) || !first) return undefined;
+  return isFunctionExpression(first) ? first : wrappedFunction(first);
+}
+
+/** For a property or method of an object literal assigned to a variable, that variable. */
+function objectOwner(node: ts.Node): (ts.VariableDeclaration & { name: ts.Identifier }) | undefined {
+  if (!(ts.isPropertyAssignment(node) || ts.isMethodDeclaration(node)) || !ts.isObjectLiteralExpression(node.parent)) {
+    return undefined;
+  }
+  let expr: ts.Node = node.parent;
+  while (ts.isParenthesizedExpression(expr.parent) || ts.isAsExpression(expr.parent) || ts.isSatisfiesExpression(expr.parent)) {
+    expr = expr.parent;
+  }
+  const decl = expr.parent;
+  return ts.isVariableDeclaration(decl) && decl.initializer === expr && ts.isIdentifier(decl.name)
+    ? (decl as ts.VariableDeclaration & { name: ts.Identifier })
+    : undefined;
+}
+
+function isImplementation(node: ts.Node): boolean {
+  return ts.isFunctionLike(node) && "body" in node && node.body !== undefined;
 }
 
 /** For `const f = () => {}` the checker returns the VariableDeclaration; this finds the arrow function. */

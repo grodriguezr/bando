@@ -95,7 +95,10 @@ function Overview({ index, onSelect }: { index: GraphIndex; onSelect(id: string)
       <div className="stats">
         <Stat value={stats.files} label="archivos" />
         <Stat value={stats.symbols} label="símbolos" />
-        <Stat value={`${pct(stats.resolvedCalls)}%`} label="llamadas internas resueltas" />
+        <Stat
+          value={`${pct(stats.resolvedCalls + stats.externalCalls)}%`}
+          label="llamadas resueltas (propias o de librerías)"
+        />
       </div>
       <p className="muted small">
         {stats.resolvedCalls} llamadas internas, {stats.externalCalls} a librerías y {stats.unresolvedCalls} sin
