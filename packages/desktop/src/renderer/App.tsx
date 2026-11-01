@@ -174,7 +174,7 @@ export function App() {
       <div className="welcome">
         <h1>Bando</h1>
         <p className="muted">
-          Explora la estructura de un proyecto JavaScript, TypeScript o Python: archivos, dependencias y llamadas.
+          Explora la estructura de un proyecto JavaScript, TypeScript, Python o Java: archivos, dependencias y llamadas.
         </p>
         <button className="primary" disabled={loading} onClick={() => load(window.bando.openProject, false)}>
           {loading ? "Analizando…" : "Abrir proyecto"}

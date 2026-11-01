@@ -29,19 +29,38 @@ export function dependencyElements(
   includePackages: boolean,
 ): ElementDefinition[] {
   const elements: ElementDefinition[] = [];
-  const boxOf = (folder: string | undefined) => (folder && folder !== ROOT ? `dir:${folder}` : undefined);
+  // An open folder holding just one subfolder (src/main/java/org/…) would draw as an empty box around
+  // another box: the chain is drawn as a single box labeled with the whole path.
+  const passThrough = (path: string) => {
+    const folder = tree.get(path)!;
+    return path !== ROOT && expanded.has(path) && folder.files.length === 0 && folder.folders.length === 1;
+  };
+  /** The box that visually contains items of `folder`: the nearest drawn open ancestor. */
+  const drawnBox = (folder: string | undefined): string | undefined => {
+    let current = folder;
+    while (current !== undefined && current !== ROOT && passThrough(current)) current = tree.get(current)!.parent;
+    return current === undefined || current === ROOT ? undefined : current;
+  };
+  const boxOf = (folder: string | undefined) => {
+    const box = drawnBox(folder);
+    return box ? `dir:${box}` : undefined;
+  };
+  /** Path from the enclosing drawn box: "main/java/org/demo" inside "src". */
+  const labelOf = (path: string) => {
+    const box = drawnBox(tree.get(path)!.parent);
+    return box ? path.slice(box.length + 1) : path;
+  };
 
   for (const folder of tree.folders.values()) {
-    if (folder.path === ROOT) continue;
+    if (folder.path === ROOT || !expanded.has(folder.parent!) || passThrough(folder.path)) continue;
     // Only folders whose parent is open are visible, as a box (open) or a node (closed).
-    if (!expanded.has(folder.parent!)) continue;
     const open = expanded.has(folder.path);
     elements.push({
       data: open
-        ? { id: `dir:${folder.path}`, label: `${folder.name}/`, kind: "dir", parent: boxOf(folder.parent) }
+        ? { id: `dir:${folder.path}`, label: `${labelOf(folder.path)}/`, kind: "dir", parent: boxOf(folder.parent) }
         : {
             id: `dir:${folder.path}`,
-            label: `${folder.name}/\n${folder.totalFiles} archivos`,
+            label: `${labelOf(folder.path)}/\n${folder.totalFiles} archivos`,
             kind: "folder",
             size: folder.totalFiles,
             parent: boxOf(folder.parent),

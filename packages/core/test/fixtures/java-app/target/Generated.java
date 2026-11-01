@@ -1,0 +1,1 @@
+class Generated { void x() {} }

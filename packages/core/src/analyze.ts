@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { analyzeProject, hasJavaScriptSources, type AnalyzeOptions } from "./analyzer.js";
+import { analyzeJava, findJavaFiles } from "./java.js";
 import { analyzePython, findPythonFiles } from "./python.js";
 import type { CodeGraph } from "./types.js";
 
 /**
- * Analyzes a project in every language Bando understands (JavaScript/TypeScript and Python) and
+ * Analyzes a project in every language Bando understands (JavaScript/TypeScript, Python and Java) and
  * merges the results into one graph, so mixed repositories show up as a whole.
  */
 export async function analyze(rootDir: string, options: AnalyzeOptions = {}): Promise<CodeGraph> {
@@ -15,7 +16,11 @@ export async function analyze(rootDir: string, options: AnalyzeOptions = {}): Pr
   const log = options.onProgress ?? (() => {});
 
   const pythonFiles = findPythonFiles(root);
-  const withJs = options.tsconfig !== undefined || hasJavaScriptSources(root) || pythonFiles.length === 0;
+  const javaFiles = findJavaFiles(root);
+  const withJs =
+    options.tsconfig !== undefined ||
+    hasJavaScriptSources(root) ||
+    (pythonFiles.length === 0 && javaFiles.length === 0);
   const graph: CodeGraph = withJs
     ? analyzeProject(root, options)
     : {
@@ -35,18 +40,24 @@ export async function analyze(rootDir: string, options: AnalyzeOptions = {}): Pr
       };
   const languages = withJs && graph.stats.files > 0 ? ["javascript/typescript"] : [];
 
+  const merge = (language: string, other: Awaited<ReturnType<typeof analyzePython>>) => {
+    const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
+    for (const node of other.nodes) if (!nodes.has(node.id)) nodes.set(node.id, node);
+    graph.nodes = [...nodes.values()];
+    graph.edges = [...graph.edges, ...other.edges];
+    graph.stats.files += other.files;
+    graph.stats.resolvedCalls += other.callStats.resolvedCalls;
+    graph.stats.externalCalls += other.callStats.externalCalls;
+    graph.stats.unresolvedCalls += other.callStats.unresolvedCalls;
+    languages.push(language);
+  };
   if (pythonFiles.length) {
     log(`${pythonFiles.length} archivos Python`);
-    const python = await analyzePython(root, pythonFiles);
-    const nodes = new Map(graph.nodes.map((n) => [n.id, n]));
-    for (const node of python.nodes) if (!nodes.has(node.id)) nodes.set(node.id, node);
-    graph.nodes = [...nodes.values()];
-    graph.edges = [...graph.edges, ...python.edges];
-    graph.stats.files += python.files;
-    graph.stats.resolvedCalls += python.callStats.resolvedCalls;
-    graph.stats.externalCalls += python.callStats.externalCalls;
-    graph.stats.unresolvedCalls += python.callStats.unresolvedCalls;
-    languages.push("python");
+    merge("python", await analyzePython(root, pythonFiles));
+  }
+  if (javaFiles.length) {
+    log(`${javaFiles.length} archivos Java`);
+    merge("java", await analyzeJava(root, javaFiles));
   }
 
   graph.stats.symbols = graph.nodes.filter((n) => n.kind !== "file" && n.kind !== "package").length;

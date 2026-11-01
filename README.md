@@ -1,6 +1,6 @@
 # Bando
 
-Bando te ayuda a entender rápido un proyecto JavaScript, TypeScript o Python que no conoces. Analiza el código fuente y te
+Bando te ayuda a entender rápido un proyecto JavaScript, TypeScript, Python o Java que no conoces. Analiza el código fuente y te
 muestra sus componentes, quién llama a quién y cómo se relacionan las carpetas; con IA (Claude o un modelo local)
 explica cada archivo, cada carpeta, el proyecto completo y lo que ocurre cuando se ejecuta una función. Todo se puede
 exportar como documentación en Markdown.
@@ -15,7 +15,11 @@ Bando solo lee el proyecto analizado: nunca lo modifica.
   - **Python**, con Tree-sitter: paquetes e imports relativos, herencia, `self`, tipos deducidos de asignaciones,
     anotaciones y `return`, y fixtures de pytest. Python no tiene tipos obligatorios, así que resuelve menos llamadas
     que TypeScript (en Flask y Requests queda sin resolver un 16-18 %, frente al 1-3 % de un proyecto TypeScript).
-  - En un repositorio con ambos lenguajes, los analiza juntos en un solo grafo.
+  - **Java**, con Tree-sitter: paquetes e imports (también estáticos y con comodín), uso de clases del mismo paquete,
+    herencia por clases e interfaces, tipos declarados de variables, campos y `var`, cadenas de llamadas por tipo de
+    retorno, sobrecargas por cantidad de argumentos y referencias `Clase::metodo`. Los métodos de interfaces (por
+    ejemplo, repositorios de Spring Data) también se enlazan. En Spring PetClinic y jsoup queda sin resolver un 1 %.
+  - En un repositorio con varios lenguajes, los analiza juntos en un solo grafo.
 - **App de escritorio** (Electron):
   - Grafo de dependencias por carpetas que se abren y cierran, y grafo de llamadas de cada función.
   - Árbol de archivos, búsqueda, y panel con firma, documentación, relaciones y código.
@@ -49,7 +53,8 @@ npm run desktop                          # abre la app; elige el proyecto con "A
 npm run desktop -- /ruta/a/un/proyecto   # o ábrela directamente con un proyecto
 ```
 
-Si el proyecto tiene `tsconfig.json`, Bando lo usa; en Python ignora los entornos virtuales (`venv`, `.venv`…); en un repositorio con varias partes (por ejemplo `backend/` y
+Si el proyecto tiene `tsconfig.json`, Bando lo usa; en Python ignora los entornos virtuales (`venv`, `.venv`…) y en Java las carpetas de compilación (`target`,
+`build`…); en un repositorio con varias partes (por ejemplo `backend/` y
 `frontend/` con su propio `tsconfig.json`), abre cada parte por separado para obtener el análisis más preciso.
 
 En la pestaña **Resumen** están la guía del proyecto, "Resumir todo" y "Exportar documentación". El selector junto a
