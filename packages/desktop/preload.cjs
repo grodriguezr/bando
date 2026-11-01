@@ -18,8 +18,8 @@ contextBridge.exposeInMainWorld("bando", {
   },
   getAiSettings: () => ipcRenderer.invoke("settings:get"),
   setAiSettings: (patch) => ipcRenderer.invoke("settings:set", patch),
-  cachedSummary: (fileId) => ipcRenderer.invoke("summary:cached", fileId),
-  generateSummary: (fileId) => ipcRenderer.invoke("summary:generate", fileId),
+  cachedSummary: (target) => ipcRenderer.invoke("summary:cached", target),
+  generateSummary: (target) => ipcRenderer.invoke("summary:generate", target),
   onSummaryDelta: (callback) => {
     const listener = (_event, delta) => callback(delta);
     ipcRenderer.on("summary:delta", listener);

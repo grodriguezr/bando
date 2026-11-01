@@ -84,6 +84,10 @@ function Overview({ index, onSelect }: { index: GraphIndex; onSelect(id: string)
 
   return (
     <div className="overview">
+      <button className="guide-button" onClick={() => onSelect("project")}>
+        <strong>Guía para empezar</strong>
+        <span className="muted small">Arquitectura, flujos y qué leer primero, generada con IA</span>
+      </button>
       <div className="stats">
         <Stat value={stats.files} label="archivos" />
         <Stat value={stats.symbols} label="símbolos" />
@@ -168,7 +172,13 @@ function FileTree({ index, selectedId, onSelect }: Props) {
     <div className="tree">
       {byDir.map(([dir, files]) => (
         <div key={dir}>
-          <div className="dir">{dir}/</div>
+          <button
+            className={`dir ${selectedId === `dir:${dir}` ? "selected" : ""}`}
+            onClick={() => onSelect(`dir:${dir}`)}
+            title="Ver la carpeta y su resumen"
+          >
+            {dir}/
+          </button>
           {files.map((file) => (
             <div key={file.id}>
               <div className="file-row">

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import type { CodeEdge, CodeGraph, CodeNode, EdgeKind, NodeKind } from "./types.js";
+import { workspacePaths } from "./workspaces.js";
 
 export interface AnalyzeOptions {
   /** Explicit tsconfig/jsconfig path. Defaults to <root>/tsconfig.json or <root>/jsconfig.json. */
@@ -10,7 +11,19 @@ export interface AnalyzeOptions {
 }
 
 const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"]);
-const IGNORED_DIRS = new Set(["node_modules", "dist", "build", "out", "coverage", ".git", ".next", ".turbo"]);
+// Test fixtures are sample projects, not part of the codebase being explained.
+const IGNORED_DIRS = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "coverage",
+  ".git",
+  ".next",
+  ".turbo",
+  "fixtures",
+  "__fixtures__",
+]);
 
 const FALLBACK_OPTIONS: ts.CompilerOptions = {
   allowJs: true,
@@ -27,10 +40,18 @@ export function analyzeProject(rootDir: string, options: AnalyzeOptions = {}): C
   const log = options.onProgress ?? (() => {});
 
   const configPath = options.tsconfig ? path.resolve(options.tsconfig) : findConfig(root);
-  const { fileNames, compilerOptions } = configPath
+  const config = configPath
     ? readConfig(configPath)
     : { fileNames: walkSources(root), compilerOptions: FALLBACK_OPTIONS };
+  const { fileNames } = config;
   log(configPath ? `Usando ${path.relative(root, configPath)}` : "Sin tsconfig: analizando todos los archivos JS/TS");
+
+  // In monorepos, point imports between workspace packages at their source; the project's own paths win.
+  const workspaces = workspacePaths(root);
+  const compilerOptions: ts.CompilerOptions = Object.keys(workspaces).length
+    ? { ...config.compilerOptions, paths: { ...workspaces, ...config.compilerOptions.paths } }
+    : config.compilerOptions;
+  if (Object.keys(workspaces).length) log(`Monorepo: ${Object.keys(workspaces).length / 2} paquetes del workspace`);
 
   // allowJs so mixed codebases are analyzed in full; noEmit because we never write output.
   // Without an explicit target TypeScript assumes ES5 and doesn't load Map, Promise, etc.

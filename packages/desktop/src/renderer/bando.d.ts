@@ -1,5 +1,7 @@
 import type { CodeGraph } from "@bando/core/types";
 
+import type { SummaryTarget } from "@bando/core/targets";
+
 export type SummaryResult = { text: string; model: string; stale?: boolean } | { error: string };
 
 export interface AiSettings {
@@ -23,11 +25,12 @@ declare global {
       ): () => void;
       getAiSettings(): Promise<AiSettings>;
       setAiSettings(patch: Partial<AiSettings>): Promise<AiSettings>;
-      /** Summary previously generated for the file, if any; `stale` if the file changed since. */
-      cachedSummary(fileId: string): Promise<SummaryResult | undefined>;
-      /** Generates a module summary with Claude, streaming text through onSummaryDelta. */
-      generateSummary(fileId: string): Promise<SummaryResult>;
-      onSummaryDelta(callback: (delta: { fileId: string; text: string }) => void): () => void;
+      /** Summary previously generated for the target, if any; `stale` if what it was based on changed. */
+      cachedSummary(target: SummaryTarget): Promise<SummaryResult | undefined>;
+      /** Generates a summary with the configured provider, streaming text through onSummaryDelta. */
+      generateSummary(target: SummaryTarget): Promise<SummaryResult>;
+      /** `key` is the target's summaryKey: "file:<id>", "folder:<dir>" or "project". */
+      onSummaryDelta(callback: (delta: { key: string; text: string }) => void): () => void;
       onProgress(callback: (message: string) => void): () => void;
     };
   }

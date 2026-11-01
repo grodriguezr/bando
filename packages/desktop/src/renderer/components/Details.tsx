@@ -1,8 +1,11 @@
 import { useEffect, useState } from "react";
 import type { GraphIndex } from "@bando/core/query";
 import type { CodeEdge, CodeNode } from "@bando/core/types";
+import type { LinkResolver } from "./Markdown";
 import { NodeLink } from "./Sidebar";
 import { SummaryPanel } from "./SummaryPanel";
+import { FolderLink } from "./FolderDetails";
+import { folderOf } from "@bando/core/targets";
 
 /** Files longer than this are shown truncated in the code view. */
 const MAX_CODE_LINES = 400;
@@ -11,9 +14,10 @@ interface Props {
   index: GraphIndex;
   node: CodeNode;
   onSelect(id: string): void;
+  resolveLink: LinkResolver;
 }
 
-export function Details({ index, node, onSelect }: Props) {
+export function Details({ index, node, onSelect, resolveLink }: Props) {
   const related = (edges: CodeEdge[], side: "from" | "to", withLines = false) =>
     edges.map((edge) => {
       const other = index.node(edge[side]);
@@ -48,7 +52,14 @@ export function Details({ index, node, onSelect }: Props) {
         {node.doc && <p className="doc">{node.doc}</p>}
       </header>
 
-      {node.kind === "file" && <SummaryPanel fileId={node.id} />}
+      {node.kind === "file" && (
+        <>
+          <p className="small">
+            En la carpeta <FolderLink dir={folderOf(node.id)} onSelect={onSelect} />
+          </p>
+          <SummaryPanel target={{ kind: "file", id: node.id }} resolveLink={resolveLink} />
+        </>
+      )}
 
       <Group title="Lo llaman">{related(index.incoming(node.id, "calls"), "from", true)}</Group>
       <Group title="Llama a">{related(index.outgoing(node.id, "calls"), "to")}</Group>

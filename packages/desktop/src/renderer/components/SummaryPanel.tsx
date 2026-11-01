@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import { summaryKey, type SummaryTarget } from "@bando/core/targets";
 import type { AiSettings } from "../bando";
-import { Markdown } from "./Markdown";
+import { Markdown, type LinkResolver } from "./Markdown";
 
 type State =
   | { status: "checking" }
@@ -14,8 +15,24 @@ const PROVIDER_HINTS: Record<AiSettings["provider"], string> = {
   local: "Modelo local (LM Studio, Ollama…): gratis y privado, más lento y menos preciso.",
 };
 
-/** AI summary of one module (file): loads the cached one if any, otherwise offers to generate it. */
-export function SummaryPanel({ fileId }: { fileId: string }) {
+const DESCRIPTIONS: Record<SummaryTarget["kind"], string> = {
+  file: "Explica qué hace este archivo, cómo se usa y qué tener en cuenta.",
+  folder: "Explica el papel de esta carpeta. Es mejor si antes se resumen sus archivos.",
+  project: "Una guía para orientarse: arquitectura, flujos principales y en qué orden leer el código.",
+};
+
+interface Props {
+  target: SummaryTarget;
+  title?: string;
+  /** Makes file and folder paths in the summary clickable. */
+  resolveLink?: LinkResolver;
+  /** Change it to re-check the cache, e.g. after the parts this summary builds on were summarized. */
+  refreshKey?: number;
+}
+
+/** AI summary of a file, folder or the project: loads the cached one if any, otherwise offers to generate it. */
+export function SummaryPanel({ target, title = "Resumen con IA", resolveLink, refreshKey }: Props) {
+  const key = summaryKey(target);
   const [state, setState] = useState<State>({ status: "checking" });
   const [settings, setSettings] = useState<AiSettings>();
 
@@ -23,12 +40,12 @@ export function SummaryPanel({ fileId }: { fileId: string }) {
     void window.bando.getAiSettings().then(setSettings);
   }, []);
 
-  // Re-check the cache whenever the file or the provider changes.
+  // Re-check the cache whenever the target, the provider or the inputs change.
   useEffect(() => {
     if (!settings) return;
     let cancelled = false;
     setState({ status: "checking" });
-    window.bando.cachedSummary(fileId).then((cached) => {
+    window.bando.cachedSummary(target).then((cached) => {
       if (cancelled) return;
       if (cached && "text" in cached) setState({ status: "done", ...cached });
       else setState({ status: "idle" });
@@ -36,20 +53,21 @@ export function SummaryPanel({ fileId }: { fileId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [fileId, settings?.provider]);
+    // `target` is identified by `key`: depending on the object itself would re-run on every render.
+  }, [key, settings?.provider, refreshKey]);
 
   useEffect(
     () =>
       window.bando.onSummaryDelta((delta) => {
-        if (delta.fileId !== fileId) return;
+        if (delta.key !== key) return;
         setState((s) => (s.status === "generating" ? { ...s, text: s.text + delta.text } : s));
       }),
-    [fileId],
+    [key],
   );
 
   const generate = async () => {
     setState({ status: "generating", text: "" });
-    const result = await window.bando.generateSummary(fileId);
+    const result = await window.bando.generateSummary(target);
     setState("error" in result ? { status: "error", message: result.error } : { status: "done", ...result });
   };
 
@@ -62,7 +80,7 @@ export function SummaryPanel({ fileId }: { fileId: string }) {
   return (
     <section className="summary">
       <h3>
-        Resumen con IA
+        {title}
         {settings && (
           <select
             value={settings.provider}
@@ -82,22 +100,30 @@ export function SummaryPanel({ fileId }: { fileId: string }) {
       </h3>
       {state.status === "idle" && settings && (
         <div>
-          <p className="muted small">{PROVIDER_HINTS[settings.provider]}</p>
+          <p className="muted small">
+            {DESCRIPTIONS[target.kind]} {PROVIDER_HINTS[settings.provider]}
+          </p>
           <button onClick={generate}>Resumir con {settings.provider === "local" ? "el modelo local" : "Claude"}</button>
         </div>
       )}
       {generating &&
         (state.text ? (
-          <Markdown text={state.text} />
+          <Markdown text={state.text} resolveLink={resolveLink} />
         ) : (
           <p className="muted small">
-            {settings?.provider === "local" ? "El modelo local está leyendo el módulo (puede tardar un par de minutos)…" : "Leyendo el módulo…"}
+            {settings?.provider === "local" ? "El modelo local está trabajando (puede tardar un par de minutos)…" : "Pensando…"}
           </p>
         ))}
       {state.status === "done" && (
         <>
-          {state.stale && <p className="warn small">El archivo cambió desde que se generó este resumen.</p>}
-          <Markdown text={state.text} />
+          {state.stale && (
+            <p className="warn small">
+              {target.kind === "file"
+                ? "El archivo cambió desde que se generó este resumen."
+                : "Hay información nueva (código o resúmenes de sus partes); puedes regenerarlo."}
+            </p>
+          )}
+          <Markdown text={state.text} resolveLink={resolveLink} />
           <p className="muted small">Generado con {state.model.replace(/^(anthropic|local):/, "")}</p>
         </>
       )}

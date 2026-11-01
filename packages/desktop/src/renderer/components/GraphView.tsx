@@ -64,6 +64,7 @@ const STYLE: StylesheetJson = [
     },
   },
   { selector: "node:selected", style: { "border-width": 3, "border-color": "#ffd166" } },
+  { selector: 'node[kind="dir"]:selected', style: { "border-width": 2, "background-opacity": 0.1, color: "#ffd166" } },
   { selector: "edge.highlight", style: { "line-color": "#ffd166", "target-arrow-color": "#ffd166", "z-index": 10 } },
   { selector: "node.faded", style: { opacity: 0.25 } },
 ];
@@ -84,8 +85,7 @@ export function GraphView({ elements, layout, selectedId, onSelect }: Props) {
   useEffect(() => {
     const cy = cytoscape({ container: container.current, style: STYLE, minZoom: 0.05, maxZoom: 3 });
     cy.on("tap", "node", (event) => {
-      const id: string = event.target.id();
-      if (!id.startsWith("dir:")) onSelectRef.current(id);
+      onSelectRef.current(event.target.id());
     });
     cyRef.current = cy;
     return () => cy.destroy();
@@ -108,9 +108,10 @@ export function GraphView({ elements, layout, selectedId, onSelect }: Props) {
       const node = selectedId ? cy.getElementById(selectedId) : undefined;
       if (!node?.nonempty()) return;
       node.select();
-      node.connectedEdges().addClass("highlight");
-      // Dim everything not directly related to the selection.
-      const related = node.closedNeighborhood().nodes();
+      // Dim everything not directly related to the selection; for a folder, to any of its files.
+      const members = node.isParent() ? node.children() : node;
+      members.connectedEdges().addClass("highlight");
+      const related = members.closedNeighborhood().nodes();
       cy.nodes().not(related).not('[kind="dir"]').addClass("faded");
     });
   }, [selectedId, elements]);

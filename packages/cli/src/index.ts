@@ -3,14 +3,21 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { analyzeProject, GraphIndex, type CodeGraph, type CodeNode } from "@bando/core";
-import { describeSummaryError, summarizeModule, type SummaryProvider } from "@bando/core/summarize";
+import {
+  describeSummaryError,
+  listFolders,
+  summarize as summarizeWithAi,
+  type SummaryProvider,
+  type SummaryTarget,
+} from "@bando/core/summarize";
 
 const USAGE = `Uso:
   bando analyze <directorio> [-o graph.json] [--tsconfig ruta]   Analiza un proyecto y guarda el grafo
   bando inspect <símbolo> [-g graph.json]                        Muestra quién llama a un símbolo y a quién llama
   bando mermaid [-g graph.json] [--packages]                     Diagrama Mermaid de dependencias entre archivos
-  bando summarize <archivo> [-g graph.json]                      Resume un módulo con Claude (requiere ANTHROPIC_API_KEY)
-    --local [--url http://localhost:1234/v1] [--model id]        …o con un modelo local (LM Studio, Ollama, llama.cpp)`;
+  bando summarize <archivo|carpeta> [-g graph.json]              Resume un archivo o carpeta con Claude (requiere ANTHROPIC_API_KEY)
+  bando guide [-g graph.json]                                    Guía "por dónde empezar" para todo el proyecto
+    --local [--url http://localhost:1234/v1] [--model id]        (summarize y guide) usa un modelo local: LM Studio, Ollama…`;
 
 const DEFAULT_GRAPH = "graph.json";
 
@@ -35,7 +42,14 @@ async function main(argv: string[]): Promise<void> {
   if (command === "analyze") return analyze(arg ?? ".", values.output, values.tsconfig);
   if (command === "inspect" && arg) return inspect(loadGraph(values.graph), arg);
   if (command === "mermaid") return console.log(mermaid(loadGraph(values.graph), values.packages));
-  if (command === "summarize" && arg) return summarize(loadGraph(values.graph), arg, values.local ? { kind: "local", baseUrl: values.url, model: values.model } : undefined);
+  const provider: SummaryProvider | undefined = values.local
+    ? { kind: "local", baseUrl: values.url, model: values.model }
+    : undefined;
+  if (command === "summarize" && arg) {
+    const graph = loadGraph(values.graph);
+    return summarize(graph, resolveTarget(graph, arg), provider);
+  }
+  if (command === "guide") return summarize(loadGraph(values.graph), { kind: "project" }, provider);
 
   console.error(USAGE);
   process.exitCode = 1;
@@ -133,24 +147,29 @@ function inspect(graph: CodeGraph, query: string): void {
   }
 }
 
-async function summarize(graph: CodeGraph, file: string, provider?: SummaryProvider): Promise<void> {
-  // Accept the graph id ("src/a.ts") or a path relative to the current directory.
-  const fileId = graph.nodes.some((n) => n.id === file && n.kind === "file")
-    ? file
-    : path.relative(graph.root, path.resolve(file)).split(path.sep).join("/");
+async function summarize(graph: CodeGraph, target: SummaryTarget, provider?: SummaryProvider): Promise<void> {
+  const label = target.kind === "project" ? "el proyecto" : target.id;
   try {
-    const source = fs.readFileSync(path.join(graph.root, fileId), "utf8");
-    console.error(`· Resumiendo ${fileId}…\n`);
+    console.error(`· Resumiendo ${label}…\n`);
     const started = Date.now();
-    const { model } = await summarizeModule(graph, fileId, source, {
-      provider,
-      onText: (text) => process.stdout.write(text),
-    });
+    const { model } = await summarizeWithAi(graph, target, { provider, onText: (text) => process.stdout.write(text) });
     console.error(`\n\n· Generado con ${model} en ${((Date.now() - started) / 1000).toFixed(1)} s`);
   } catch (error) {
     console.error(`\n${describeSummaryError(error)}`);
     process.exitCode = 1;
   }
+}
+
+/** Accepts a graph id ("src/a.ts", "src/a") or a path relative to the current directory. */
+function resolveTarget(graph: CodeGraph, arg: string): SummaryTarget {
+  const id = (candidate: string) => candidate.replace(/\/$/, "") || ".";
+  const relative = id(path.relative(graph.root, path.resolve(arg)).split(path.sep).join("/"));
+  const folders = new Set(listFolders(graph));
+  for (const candidate of [id(arg), relative]) {
+    if (graph.nodes.some((n) => n.kind === "file" && n.id === candidate)) return { kind: "file", id: candidate };
+    if (folders.has(candidate)) return { kind: "folder", id: candidate };
+  }
+  return { kind: "file", id: relative };
 }
 
 function mermaid(graph: CodeGraph, includePackages: boolean): string {

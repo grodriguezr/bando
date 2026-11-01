@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import type { CodeGraph } from "@bando/core/types";
+import { summaryKey, type SummaryTarget } from "@bando/core/summarize";
 import { SummaryService, type AiSettings } from "./summaries.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -88,14 +89,15 @@ ipcMain.handle("file:read", async (_event, relativePath: string) => {
 ipcMain.handle("settings:get", () => summaries.settings());
 ipcMain.handle("settings:set", (_event, patch: Partial<AiSettings>) => summaries.updateSettings(patch));
 
-ipcMain.handle("summary:cached", (_event, fileId: string) =>
-  currentGraph ? summaries.cached(currentGraph.root, fileId).catch(() => undefined) : undefined,
+ipcMain.handle("summary:cached", (_event, target: SummaryTarget) =>
+  currentGraph ? summaries.cached(currentGraph, target).catch(() => undefined) : undefined,
 );
 
-ipcMain.handle("summary:generate", (event, fileId: string) => {
+ipcMain.handle("summary:generate", (event, target: SummaryTarget) => {
   if (!currentGraph) return { error: "No hay proyecto abierto" };
-  return summaries.generate(currentGraph, fileId, (text) => {
-    if (!event.sender.isDestroyed()) event.sender.send("summary:delta", { fileId, text });
+  const key = summaryKey(target);
+  return summaries.generate(currentGraph, target, (text) => {
+    if (!event.sender.isDestroyed()) event.sender.send("summary:delta", { key, text });
   });
 });
 

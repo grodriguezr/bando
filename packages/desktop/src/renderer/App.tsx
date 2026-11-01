@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LayoutOptions } from "cytoscape";
 import { GraphIndex } from "@bando/core/query";
+import { listFolders } from "@bando/core/targets";
 import type { CodeGraph } from "@bando/core/types";
 import { Details } from "./components/Details";
+import { FolderDetails } from "./components/FolderDetails";
+import { ProjectGuide } from "./components/ProjectGuide";
 import { GraphView } from "./components/GraphView";
 import { Sidebar } from "./components/Sidebar";
 import { callElements, dependencyElements, isSymbol } from "./elements";
@@ -54,7 +57,33 @@ export function App() {
     setHistory((h) => [...h, id]);
     const node = index?.node(id);
     if (node && isSymbol(node)) setView("calls");
+    // Folders and the guide only exist in the dependency view.
+    else if (!node) setView("deps");
   };
+
+  const folders = useMemo(() => new Set(graph ? listFolders(graph) : []), [graph]);
+  /** File basenames ("main.ts") and symbol names ("GraphIndex.search") that identify exactly one node. */
+  const uniqueNames = useMemo(() => {
+    const byName = new Map<string, string[]>();
+    for (const node of graph?.nodes ?? []) {
+      if (node.kind === "package") continue;
+      const name = node.kind === "file" ? node.name : node.id.slice(node.id.indexOf("#") + 1);
+      byName.set(name, [...(byName.get(name) ?? []), node.id]);
+    }
+    return new Map([...byName].filter(([, ids]) => ids.length === 1).map(([name, [id]]) => [name, id!]));
+  }, [graph]);
+
+  /** Makes paths, file names and symbols mentioned in AI summaries clickable. */
+  const resolveLink = useCallback(
+    (code: string) => {
+      const text = code.trim().replace(/\(\)$/, "");
+      const id = text.replace(/^\.\//, "").replace(/\/$/, "") || ".";
+      const target = index?.node(id) ? id : folders.has(id) ? `dir:${id}` : uniqueNames.get(text);
+      return target ? () => select(target) : undefined;
+    },
+    // The returned handlers call `select`, which reads `index` and `selectedId`.
+    [index, folders, uniqueNames, selectedId],
+  );
 
   const load = async (action: () => Promise<CodeGraph | undefined>, keepSelection: boolean) => {
     setLoading(true);
@@ -102,7 +131,7 @@ export function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${selectedId === "project" ? "wide-details" : ""}`}>
       <header className="toolbar">
         <strong className="project" title={graph.root}>
           {graph.root.split(/[\\/]/).pop()}
@@ -158,10 +187,26 @@ export function App() {
         {graphData.truncated && <div className="legend warn">Hay demasiadas llamadas: se muestran las primeras 40 por nivel</div>}
       </main>
 
-      {selected ? (
-        <Details key={selected.id} index={index} node={selected} onSelect={select} />
+      {selectedId === "project" ? (
+        <ProjectGuide index={index} resolveLink={resolveLink} />
+      ) : selectedId?.startsWith("dir:") ? (
+        <FolderDetails
+          key={selectedId}
+          index={index}
+          dir={selectedId.slice(4)}
+          onSelect={select}
+          resolveLink={resolveLink}
+        />
+      ) : selected ? (
+        <Details key={selected.id} index={index} node={selected} onSelect={select} resolveLink={resolveLink} />
       ) : (
-        <aside className="details muted pad">Selecciona un archivo o símbolo para ver sus detalles.</aside>
+        <aside className="details muted pad">
+          Selecciona un archivo, carpeta o símbolo para ver sus detalles, o abre la{" "}
+          <button className="link" onClick={() => select("project")}>
+            guía del proyecto
+          </button>
+          .
+        </aside>
       )}
     </div>
   );

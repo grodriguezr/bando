@@ -23,6 +23,13 @@
     "./summarize": {
       "types": "./dist/summarize.d.ts",
       "default": "./dist/summarize.js"
+    },
+    "./targets": {
+      "types": "./dist/targets.d.ts",
+      "default": "./dist/targets.js"
     }
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
   }
 }
