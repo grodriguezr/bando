@@ -1,0 +1,10 @@
+{
+  "name": "@bando/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": { "bando": "dist/index.js" },
+  "dependencies": {
+    "@bando/core": "*"
+  }
+}
