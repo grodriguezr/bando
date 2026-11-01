@@ -87,7 +87,7 @@ function TargetLink({ target, onSelect }: { target: SummaryTarget; onSelect(id: 
       </button>
     );
   }
-  const id = target.kind === "folder" ? `dir:${target.id}` : target.id;
+  const id = target.kind === "folder" ? `dir:${target.id}` : target.id; // flows: the function's id
   return (
     <button className="link" onClick={() => onSelect(id)}>
       {target.id}

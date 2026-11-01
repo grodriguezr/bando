@@ -3,7 +3,7 @@ import path from "node:path";
 import { app } from "electron";
 import type { CodeGraph } from "@bando/core/types";
 import { DEFAULT_LOCAL_URL, describeSummaryError, type SummaryProvider, type SummaryTarget } from "@bando/core/summarize";
-import { SummaryStore, type SummarizeAllEvent } from "@bando/core/summary-store";
+import { defaultConcurrency, SummaryStore, type SummarizeAllEvent } from "@bando/core/summary-store";
 import { exportDocs, type ExportDocsResult } from "@bando/core/docs";
 
 export type ProviderKind = SummaryProvider["kind"];
@@ -119,6 +119,7 @@ export class SummaryService {
     void this.store
       .summarizeAll(graph, {
         provider,
+        concurrency: defaultConcurrency(provider),
         onEvent,
         onText: (target, text) => this.events.delta(target, text),
         shouldStop: () => this.stopRequested,

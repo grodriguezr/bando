@@ -52,6 +52,9 @@ export function Details({ index, node, onSelect, resolveLink }: Props) {
         {node.doc && <p className="doc">{node.doc}</p>}
       </header>
 
+      {(node.kind === "function" || node.kind === "method") && (
+        <SummaryPanel target={{ kind: "flow", id: node.id }} title="Explicar el flujo" resolveLink={resolveLink} />
+      )}
       {node.kind === "file" && (
         <>
           <p className="small">

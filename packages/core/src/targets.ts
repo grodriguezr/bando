@@ -1,9 +1,14 @@
 import type { CodeGraph } from "./types.js";
 
 /** What a summary is about. Has no Node.js dependencies, so the UI can use it too. */
-export type SummaryTarget = { kind: "file"; id: string } | { kind: "folder"; id: string } | { kind: "project" };
+export type SummaryTarget =
+  | { kind: "file"; id: string }
+  | { kind: "folder"; id: string }
+  | { kind: "project" }
+  /** What happens when a function runs, following its calls. `id` is the function's node id. */
+  | { kind: "flow"; id: string };
 
-/** "file:src/a.ts", "folder:src" or "project": identifies a summary in caches and events. */
+/** "file:src/a.ts", "folder:src", "flow:src/a.ts#f" or "project": identifies a summary in caches and events. */
 export function summaryKey(target: SummaryTarget): string {
   return target.kind === "project" ? "project" : `${target.kind}:${target.id}`;
 }

@@ -19,6 +19,7 @@ const DESCRIPTIONS: Record<SummaryTarget["kind"], string> = {
   file: "Explica qué hace este archivo, cómo se usa y qué tener en cuenta.",
   folder: "Explica el papel de esta carpeta. Es mejor si antes se resumen sus archivos.",
   project: "Una guía para orientarse: arquitectura, flujos principales y en qué orden leer el código.",
+  flow: "Sigue las llamadas desde aquí y explica paso a paso qué ocurre, qué datos usa y qué efectos tiene.",
 };
 
 interface Props {
@@ -128,11 +129,15 @@ export function SummaryPanel({ target, title = "Resumen con IA", resolveLink, re
             <p className="warn small">
               {target.kind === "file"
                 ? "El archivo cambió desde que se generó este resumen."
-                : "Hay información nueva (código o resúmenes de sus partes); puedes regenerarlo."}
+                : target.kind === "flow"
+                  ? "El código de alguna función de este flujo cambió desde que se generó la explicación."
+                  : "Hay información nueva (código o resúmenes de sus partes); puedes regenerarlo."}
             </p>
           )}
           <Markdown text={state.text} resolveLink={resolveLink} />
-          <p className="muted small">Generado con {state.model.replace(/^(anthropic|local):/, "")}</p>
+          {!state.model.startsWith("bando:") && (
+            <p className="muted small">Generado con {state.model.replace(/^(anthropic|local):/, "")}</p>
+          )}
         </>
       )}
       {state.status === "error" && (

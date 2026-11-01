@@ -112,6 +112,34 @@ describe("SummaryStore", () => {
   });
 });
 
+describe("SummaryStore en paralelo", () => {
+  test("respeta el límite de concurrencia y el orden archivos → carpetas → guía", async () => {
+    const graph = analyzeProject(fixture("monorepo"));
+    let running = 0;
+    let maxRunning = 0;
+    const log: string[] = [];
+    const generate = (async (_g: unknown, target: SummaryTarget) => {
+      running++;
+      maxRunning = Math.max(maxRunning, running);
+      log.push(`inicio ${label(target)}`);
+      await new Promise((r) => setTimeout(r, 20));
+      running--;
+      log.push(`fin ${label(target)}`);
+      return { text: `## Propósito\n${label(target)}`, model: "local:fake" };
+    }) as never;
+
+    await new SummaryStore(path.join(tmp, "parallel.json"), generate).summarizeAll(graph, {
+      provider: local,
+      concurrency: 2,
+    });
+    assert.equal(maxRunning, 2, "corren dos a la vez, nunca más");
+    const lastFileEnd = Math.max(...log.flatMap((l, i) => (l.startsWith("fin file:") ? [i] : [])));
+    const firstFolderStart = log.findIndex((l) => l.startsWith("inicio folder:"));
+    assert.ok(lastFileEnd < firstFolderStart, "las carpetas empiezan cuando terminaron todos los archivos");
+    assert.equal(log.at(-2), "inicio project");
+  });
+});
+
 describe("referencias inventadas", () => {
   test("detecta archivos mencionados que no existen", () => {
     const graph = analyzeProject(fixture("basic"));

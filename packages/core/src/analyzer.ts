@@ -205,8 +205,13 @@ class GraphBuilder {
         else if (node.expression.kind !== ts.SyntaxKind.SuperKeyword) {
           this.addCall(ownerId, node.expression, line);
         }
+        for (const arg of node.arguments) this.addCallback(ownerId, arg, line);
       } else if (ts.isNewExpression(node)) {
         this.addCall(ownerId, node.expression, line);
+        for (const arg of node.arguments ?? []) this.addCallback(ownerId, arg, line);
+      } else if (ts.isJsxAttribute(node) && node.initializer && ts.isJsxExpression(node.initializer)) {
+        // <button onClick={guardar}>: the component hands the function to be called later.
+        if (node.initializer.expression) this.addCallback(ownerId, node.initializer.expression, line);
       } else if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
         // Only capitalized tags are components; lowercase ones are intrinsic HTML elements.
         if (/^[A-Z]/.test(node.tagName.getText(sf))) this.addCall(ownerId, node.tagName, line);
@@ -229,6 +234,19 @@ class GraphBuilder {
       this.callStats.resolvedCalls++;
       this.addEdge(ownerId, target, "calls", line);
     } else this.callStats.unresolvedCalls++;
+  }
+
+  /**
+   * A project function passed by reference (`items.map(formatear)`, `setTimeout(guardar)`,
+   * `onClick={guardar}`) will run as part of this code, so it counts as a call. Not counted in the
+   * call statistics, which are about call expressions.
+   */
+  private addCallback(ownerId: string, expr: ts.Expression, line: number): void {
+    if (!ts.isIdentifier(expr) && !ts.isPropertyAccessExpression(expr)) return;
+    const target = this.resolveTarget(expr, ownerId);
+    if (!target || target === "external" || target === ownerId) return;
+    const kind = this.nodeById.get(target)?.kind;
+    if (kind === "function" || kind === "method") this.addEdge(ownerId, target, "calls", line);
   }
 
   private addHeritage(node: ts.ClassLikeDeclaration | ts.InterfaceDeclaration, line: number): void {

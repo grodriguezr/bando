@@ -4,7 +4,7 @@ import path from "node:path";
 import { parseArgs } from "node:util";
 import { analyzeProject, GraphIndex, type CodeGraph, type CodeNode } from "@bando/core";
 import { exportDocs } from "@bando/core/docs";
-import { SummaryStore } from "@bando/core/summary-store";
+import { defaultConcurrency, SummaryStore } from "@bando/core/summary-store";
 import {
   describeSummaryError,
   findUnknownReferences,
@@ -20,7 +20,8 @@ const USAGE = `Uso:
   bando mermaid [-g graph.json] [--packages]                     Diagrama Mermaid de dependencias entre archivos
   bando summarize <archivo|carpeta> [-g graph.json]              Resume un archivo o carpeta con Claude (requiere ANTHROPIC_API_KEY)
   bando guide [-g graph.json]                                    Guía "por dónde empezar" para todo el proyecto
-  bando summarize-all [-g graph.json]                            Resume archivos, carpetas y la guía (retoma si se interrumpe)
+  bando explain <función> [-g graph.json]                        Explica paso a paso qué ocurre cuando se ejecuta una función
+  bando summarize-all [-g graph.json] [-j N]                     Resume archivos, carpetas y la guía (retoma si se interrumpe)
   bando docs [-o docs] [-g graph.json]                           Exporta la documentación en Markdown con los resúmenes guardados
     --local [--url http://localhost:1234/v1] [--model id]        Usa un modelo local (LM Studio, Ollama…) en lugar de Claude
   Los resúmenes se guardan en una caché compartida con la app de escritorio.`;
@@ -37,6 +38,7 @@ async function main(argv: string[]): Promise<void> {
       tsconfig: { type: "string" },
       packages: { type: "boolean", default: false },
       local: { type: "boolean", default: false },
+      jobs: { type: "string", short: "j" },
       url: { type: "string" },
       model: { type: "string" },
       help: { type: "boolean", short: "h" },
@@ -56,7 +58,20 @@ async function main(argv: string[]): Promise<void> {
     return summarize(graph, resolveTarget(graph, arg), provider);
   }
   if (command === "guide") return summarize(loadGraph(values.graph), { kind: "project" }, provider);
-  if (command === "summarize-all") return summarizeAll(loadGraph(values.graph), provider);
+  if (command === "explain" && arg) {
+    const graph = loadGraph(values.graph);
+    const node = findSymbol(graph, arg);
+    if (!node) {
+      console.error(`No se encontró la función "${arg}". Prueba con: bando inspect ${arg}`);
+      process.exitCode = 1;
+      return;
+    }
+    return summarize(graph, { kind: "flow", id: node.id }, provider);
+  }
+  if (command === "summarize-all") {
+    const jobs = values.jobs ? Number(values.jobs) : defaultConcurrency(provider);
+    return summarizeAll(loadGraph(values.graph), provider, jobs);
+  }
   if (command === "docs") return docs(loadGraph(values.graph), values.graph, values.output ?? "docs", provider);
 
   console.error(USAGE);
@@ -156,7 +171,7 @@ function inspect(graph: CodeGraph, query: string): void {
 }
 
 async function summarize(graph: CodeGraph, target: SummaryTarget, provider: SummaryProvider): Promise<void> {
-  const label = target.kind === "project" ? "el proyecto" : target.id;
+  const label = target.kind === "project" ? "el proyecto" : target.kind === "flow" ? `el flujo de ${target.id}` : target.id;
   try {
     console.error(`· Resumiendo ${label}…\n`);
     const started = Date.now();
@@ -172,7 +187,7 @@ async function summarize(graph: CodeGraph, target: SummaryTarget, provider: Summ
   }
 }
 
-async function summarizeAll(graph: CodeGraph, provider: SummaryProvider): Promise<void> {
+async function summarizeAll(graph: CodeGraph, provider: SummaryProvider, concurrency: number): Promise<void> {
   const started = Date.now();
   const label = (t: SummaryTarget) => (t.kind === "project" ? "guía del proyecto" : t.kind === "folder" ? `${t.id}/` : t.id);
   let stop = false;
@@ -181,8 +196,10 @@ async function summarizeAll(graph: CodeGraph, provider: SummaryProvider): Promis
     console.error("\n· Deteniendo al terminar el resumen actual (Ctrl+C otra vez para salir ya)…");
     process.once("SIGINT", () => process.exit(130));
   });
+  console.error(`· ${concurrency} resúmenes a la vez`);
   await new SummaryStore().summarizeAll(graph, {
     provider,
+    concurrency,
     shouldStop: () => stop,
     onEvent: (event) => {
       if (event.type === "start") {
@@ -224,6 +241,22 @@ function docs(graph: CodeGraph, graphFile: string, outDir: string, provider: Sum
 function warnUnknownReferences(graph: CodeGraph, text: string): void {
   const unknown = findUnknownReferences(graph, text);
   if (unknown.length) console.error(`⚠ Menciona archivos que no existen en el proyecto: ${unknown.join(", ")}`);
+}
+
+/** A function or method by id ("src/a.ts#f"), qualified name ("Clase.metodo") or unique name. */
+function findSymbol(graph: CodeGraph, query: string): CodeNode | undefined {
+  const callable = graph.nodes.filter((n) => n.kind === "function" || n.kind === "method");
+  const byId = callable.find((n) => n.id === query);
+  if (byId) return byId;
+  const qualified = callable.filter((n) => n.id.endsWith(`#${query}`));
+  if (qualified.length === 1) return qualified[0];
+  const byName = callable.filter((n) => n.name === query);
+  if (qualified.length > 1 || byName.length > 1) {
+    const options = (qualified.length > 1 ? qualified : byName).map((n) => n.id);
+    console.error(`"${query}" es ambiguo; usa uno de: ${options.slice(0, 8).join(", ")}`);
+    return undefined;
+  }
+  return byName[0];
 }
 
 /** Accepts a graph id ("src/a.ts", "src/a") or a path relative to the current directory. */

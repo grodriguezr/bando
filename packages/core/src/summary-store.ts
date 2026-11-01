@@ -32,12 +32,34 @@ export interface SummarizeAllOptions {
   provider: SummaryProvider;
   onEvent?: (event: SummarizeAllEvent) => void;
   onText?: (target: SummaryTarget, delta: string) => void;
-  /** Checked between summaries: the one in progress always finishes. */
+  /** Checked between summaries: the ones in progress always finish. */
   shouldStop?: () => boolean;
+  /**
+   * Summaries generated at the same time. Local servers that accept parallel requests (LM Studio,
+   * Ollama with OLLAMA_NUM_PARALLEL) finish sooner; default 1.
+   */
+  concurrency?: number;
 }
+
+/**
+ * Measured on a Mac mini M4 (16 GB) with Qwen2.5-Coder 14B in LM Studio (4 parallel slots), same 6
+ * files: 1 at a time 77 s/file, 2 → 52 s, 4 → 41 s. Free memory bottomed out at ~5% with both 2 and 4.
+ */
+const LOCAL_CONCURRENCY = 4;
+
+/** Characters of code in a flow explanation for local models, which usually run with an 8K-token context. */
+const LOCAL_SOURCE_BUDGET = 12_000;
 
 /** Gives up after this many failures in a row (e.g. the local server went down). */
 const MAX_CONSECUTIVE_FAILURES = 3;
+
+/**
+ * Summaries generated at once by default. The Anthropic API handles parallel requests easily; a
+ * local server shares one GPU and its memory, so it gains less and risks running out of memory.
+ */
+export function defaultConcurrency(provider: SummaryProvider): number {
+  return provider.kind === "local" ? LOCAL_CONCURRENCY : 4;
+}
 
 /** Where Bando keeps data shared by the CLI and the desktop app, outside of any project. */
 export function defaultDataDir(): string {
@@ -64,6 +86,11 @@ export class SummaryStore {
     private readonly generator: typeof summarize = summarize,
   ) {}
 
+  /** What a request is built from: the summaries it builds on and how much code fits the provider. */
+  private context(root: string, provider: SummaryProvider["kind"]) {
+    return { summaries: this.known(root, provider), sourceBudget: provider === "local" ? LOCAL_SOURCE_BUDGET : undefined };
+  }
+
   /** Every summary of this project and provider, keyed by `summaryKey`. */
   known(root: string, provider: SummaryProvider["kind"]): Map<string, string> {
     const prefix = keyPrefix(provider, root);
@@ -79,7 +106,7 @@ export class SummaryStore {
     if (!entry) return undefined;
     let stale = true;
     try {
-      stale = entry.hash !== hashOf(buildSummaryPrompt(graph, target, { summaries: this.known(graph.root, provider) }));
+      stale = entry.hash !== hashOf(buildSummaryPrompt(graph, target, this.context(graph.root, provider)));
     } catch {
       // The file was deleted or can't be read: keep the old summary, flagged as stale.
     }
@@ -102,9 +129,9 @@ export class SummaryStore {
     if (running) return running;
 
     const task = (async () => {
-      const summaries = this.known(graph.root, options.provider.kind);
-      const request = buildSummaryPrompt(graph, target, { summaries });
-      const result = await this.generator(graph, target, { ...options, summaries });
+      const context = this.context(graph.root, options.provider.kind);
+      const request = buildSummaryPrompt(graph, target, context);
+      const result = await this.generator(graph, target, { ...options, ...context });
       this.save(k, { hash: hashOf(request), text: result.text, model: result.model, createdAt: new Date().toISOString() });
       return result;
     })().finally(() => this.inFlight.delete(k));
@@ -135,19 +162,20 @@ export class SummaryStore {
     const project: SummaryTarget = { kind: "project" };
     const needsGuide =
       pendingFiles.length > 0 || pendingFolders.length > 0 || this.pending(graph, [project], kind).length > 0;
-    const queue = [...pendingFiles, ...pendingFolders, ...(needsGuide ? [project] : [])];
+    // Each phase only needs the previous one: files are independent of each other, and so are folders.
+    const phases = [pendingFiles, pendingFolders, needsGuide ? [project] : []];
+    const total = phases.reduce((n, phase) => n + phase.length, 0);
+    const concurrency = Math.max(1, options.concurrency ?? 1);
 
-    emit({ type: "start", total: queue.length });
+    emit({ type: "start", total });
     let done = 0;
     let failed = 0;
     let failuresInARow = 0;
     let stopped = false;
-    for (const target of queue) {
-      if (options.shouldStop?.()) {
-        stopped = true;
-        break;
-      }
-      emit({ type: "progress", done, total: queue.length, target, failed });
+    const halt = () => stopped || (options.shouldStop?.() ?? false);
+
+    const summarizeOne = async (target: SummaryTarget) => {
+      emit({ type: "progress", done, total, target, failed });
       try {
         await this.generate(graph, target, {
           provider: options.provider,
@@ -161,12 +189,21 @@ export class SummaryStore {
         emit({ type: "summarized", target, error: describeSummaryError(error) });
       }
       done++;
-      if (failuresInARow >= MAX_CONSECUTIVE_FAILURES) {
+      if (failuresInARow >= MAX_CONSECUTIVE_FAILURES) stopped = true;
+    };
+
+    for (const phase of phases) {
+      let next = 0;
+      const worker = async () => {
+        while (next < phase.length && !halt()) await summarizeOne(phase[next++]!);
+      };
+      await Promise.all(Array.from({ length: Math.min(concurrency, phase.length) }, worker));
+      if (halt()) {
         stopped = true;
         break;
       }
     }
-    emit({ type: "finished", done, total: queue.length, failed, stopped });
+    emit({ type: "finished", done, total, failed, stopped });
   }
 
   /** Reloads from disk when another process (the CLI, another window) changed the file. */

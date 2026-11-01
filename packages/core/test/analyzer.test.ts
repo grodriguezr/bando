@@ -157,5 +157,13 @@ describe("patrones de React y servicios", () => {
   test("las de librerías cuentan como externas y lo dinámico queda sin resolver", () => {
     assert.ok(!edge(graph, `${page}#Page`, `${page}#Page`, "calls"), "no inventa una llamada recursiva");
     assert.equal(graph.stats.unresolvedCalls, 1, "solo elegir() queda sin resolver");
+    assert.ok(!edge(graph, "src/Boton.tsx#Boton", "src/Boton.tsx#Boton", "calls"));
+  });
+
+  test("las funciones pasadas como argumento o prop cuentan como llamadas", () => {
+    const boton = "src/Boton.tsx#Boton";
+    assertEdge(graph, boton, "src/Boton.tsx#formatear", "calls"); // [1, 2].map(formatear)
+    const guardar = assertEdge(graph, boton, "src/Boton.tsx#Boton.guardar", "calls"); // setTimeout + onClick
+    assert.deepEqual(guardar.lines, [10, 11]);
   });
 });

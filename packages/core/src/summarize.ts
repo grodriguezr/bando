@@ -3,6 +3,9 @@ import path from "node:path";
 import { generateText, type GeneratedText, type GenerateOptions } from "./llm.js";
 import { GraphIndex } from "./query.js";
 import { folderOf, listFolders, type SummaryTarget } from "./targets.js";
+export { AUTOMATIC_MODEL } from "./trivial.js";
+import { AUTOMATIC_MODEL, automaticSummary } from "./trivial.js";
+import { buildFlowPrompt, FLOW_SYSTEM_PROMPT } from "./flow.js";
 import type { CodeGraph, CodeNode } from "./types.js";
 
 export {
@@ -39,15 +42,26 @@ export interface SummaryContext {
    * files' summaries and the project guide on its folders'; missing ones fall back to static data.
    */
   summaries?: ReadonlyMap<string, string>;
+  /** Characters of source code a flow explanation may include; smaller for models with short context. */
+  sourceBudget?: number;
 }
 
-/** Generates a summary of a file, a folder or the whole project. Streams text through `onText`. */
-export function summarize(
+/** Generates a summary of a file, folder, flow or the whole project. Streams text through `onText`. */
+export async function summarize(
   graph: CodeGraph,
   target: SummaryTarget,
   options: GenerateOptions & SummaryContext = {},
 ): Promise<GeneratedText> {
   const { system, prompt } = buildSummaryPrompt(graph, target, options);
+  if (target.kind === "file") {
+    // Types, constants, translations and re-export files are described without a model.
+    const source = fs.readFileSync(path.join(graph.root, target.id), "utf8");
+    const text = automaticSummary(graph, target.id, source);
+    if (text) {
+      options.onText?.(text);
+      return { text, model: AUTOMATIC_MODEL };
+    }
+  }
   return generateText(system, prompt, options);
 }
 
@@ -69,6 +83,9 @@ export function buildSummaryPrompt(
     return { system: FILE_SYSTEM_PROMPT, prompt: buildModulePrompt(graph, target.id, source) };
   }
   if (target.kind === "folder") return { system: FOLDER_SYSTEM_PROMPT, prompt: folderPrompt(index, target.id, summaries) };
+  if (target.kind === "flow") {
+    return { system: FLOW_SYSTEM_PROMPT, prompt: buildFlowPrompt(index, target.id, context.sourceBudget) };
+  }
   return { system: PROJECT_SYSTEM_PROMPT, prompt: projectPrompt(index, summaries) };
 }
 
