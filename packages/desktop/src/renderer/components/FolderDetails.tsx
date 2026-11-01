@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import type { GraphIndex } from "@bando/core/query";
-import { folderOf, listFolders } from "@bando/core/targets";
+import type { FolderTree } from "@bando/core/folder-tree";
+import { folderOf } from "@bando/core/targets";
 import { BatchSummarize } from "./BatchSummarize";
 import type { LinkResolver } from "./Markdown";
 import { NodeLink } from "./Sidebar";
@@ -8,12 +9,13 @@ import { SummaryPanel } from "./SummaryPanel";
 
 interface Props {
   index: GraphIndex;
+  tree: FolderTree;
   dir: string;
   onSelect(id: string): void;
   resolveLink: LinkResolver;
 }
 
-export function FolderDetails({ index, dir, onSelect, resolveLink }: Props) {
+export function FolderDetails({ index, tree, dir, onSelect, resolveLink }: Props) {
   const [refresh, setRefresh] = useState(0);
 
   const data = useMemo(() => {
@@ -26,9 +28,10 @@ export function FolderDetails({ index, dir, onSelect, resolveLink }: Props) {
       if (inFolder.has(edge.from) && !inFolder.has(edge.to)) bump(uses, folderOf(edge.to));
       if (!inFolder.has(edge.from) && inFolder.has(edge.to)) bump(usedBy, folderOf(edge.from));
     }
-    const subfolders = listFolders(index.graph).filter((f) => f !== dir && (dir === "." || f.startsWith(`${dir}/`)));
-    return { files, uses: sorted(uses), usedBy: sorted(usedBy), subfolders };
-  }, [index, dir]);
+    const info = tree.get(dir);
+    const subfolders: [string, number][] = (info?.folders ?? []).map((f) => [f, tree.get(f)!.totalFiles]);
+    return { files, uses: sorted(uses), usedBy: sorted(usedBy), subfolders, totalFiles: info?.totalFiles ?? 0 };
+  }, [index, tree, dir]);
 
   const targets = useMemo(() => data.files.map((f) => ({ kind: "file" as const, id: f.id })), [data]);
 
@@ -39,25 +42,36 @@ export function FolderDetails({ index, dir, onSelect, resolveLink }: Props) {
           <span className="badge">carpeta</span>
         </div>
         <h2>{dir === "." ? "(raíz del proyecto)" : `${dir}/`}</h2>
-        <p className="muted small">{data.files.length} archivos analizados</p>
+        <p className="muted small">
+          {data.files.length} archivos directos
+          {data.totalFiles > data.files.length && ` · ${data.totalFiles} en total con sus subcarpetas`}
+        </p>
       </header>
 
-      <SummaryPanel target={{ kind: "folder", id: dir }} resolveLink={resolveLink} refreshKey={refresh} />
-      <BatchSummarize targets={targets} noun="archivos" onProgress={() => setRefresh((n) => n + 1)} />
+      {data.files.length > 0 ? (
+        <>
+          <SummaryPanel target={{ kind: "folder", id: dir }} resolveLink={resolveLink} refreshKey={refresh} />
+          <BatchSummarize targets={targets} noun="archivos" onProgress={() => setRefresh((n) => n + 1)} />
+        </>
+      ) : (
+        <p className="muted small">Esta carpeta solo agrupa subcarpetas: abre una de ellas para ver su resumen.</p>
+      )}
 
-      <section>
-        <h3>
-          Archivos <span className="muted">({data.files.length})</span>
-        </h3>
-        <ul className="list">
-          {data.files.map((file) => (
-            <li key={file.id}>
-              <NodeLink node={file} onSelect={onSelect} />
-            </li>
-          ))}
-        </ul>
-      </section>
-      <FolderGroup title="Subcarpetas" folders={data.subfolders.map((f) => [f, 0])} onSelect={onSelect} />
+      {data.files.length > 0 && (
+        <section>
+          <h3>
+            Archivos <span className="muted">({data.files.length})</span>
+          </h3>
+          <ul className="list">
+            {data.files.map((file) => (
+              <li key={file.id}>
+                <NodeLink node={file} onSelect={onSelect} />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <FolderGroup title="Subcarpetas" folders={data.subfolders} onSelect={onSelect} unit="archivos" />
       <FolderGroup title="Importa de" folders={data.uses} onSelect={onSelect} />
       <FolderGroup title="La importan" folders={data.usedBy} onSelect={onSelect} />
     </aside>
@@ -77,10 +91,12 @@ function FolderGroup({
   title,
   folders,
   onSelect,
+  unit = "importaciones",
 }: {
   title: string;
   folders: [string, number][];
   onSelect(id: string): void;
+  unit?: string;
 }) {
   if (!folders.length) return null;
   return (
@@ -92,7 +108,11 @@ function FolderGroup({
         {folders.map(([dir, count]) => (
           <li key={dir}>
             <FolderLink dir={dir} onSelect={onSelect} />
-            {count > 0 && <span className="count" title="Importaciones">{count}</span>}
+            {count > 0 && (
+              <span className="count" title={unit}>
+                {count}
+              </span>
+            )}
           </li>
         ))}
       </ul>

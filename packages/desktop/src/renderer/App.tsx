@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { LayoutOptions } from "cytoscape";
 import { GraphIndex } from "@bando/core/query";
-import { listFolders } from "@bando/core/targets";
+import { FolderTree } from "@bando/core/folder-tree";
+import { folderOf, listFolders } from "@bando/core/targets";
 import type { CodeGraph } from "@bando/core/types";
 import { Details } from "./components/Details";
 import { FolderDetails } from "./components/FolderDetails";
@@ -16,8 +17,9 @@ const DEPS_LAYOUT = {
   name: "fcose",
   animate: false,
   quality: "proof",
-  nodeRepulsion: 6000,
-  idealEdgeLength: 90,
+  nodeRepulsion: 20000,
+  idealEdgeLength: 150,
+  edgeElasticity: 0.2,
   nodeSeparation: 90,
   packComponents: true,
   nodeDimensionsIncludeLabels: true,
@@ -55,10 +57,28 @@ export function App() {
   const selectedId = history.at(-1);
   const selected = selectedId ? index?.node(selectedId) : undefined;
 
+  const tree = useMemo(
+    () => new FolderTree(graph?.nodes.filter((n) => n.kind === "file").map((n) => n.id) ?? []),
+    [graph],
+  );
+  // Folders open in the dependency view; a new project starts at a readable level of detail.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  useEffect(() => setExpanded(tree.defaultExpanded()), [tree]);
+
+  /** Opens the folders needed to see `path` (and `path` itself), keeping the same Set if nothing changes. */
+  const reveal = (path: string, includeSelf: boolean) => {
+    const needed = [...tree.ancestors(path), ...(includeSelf ? [path] : [])];
+    setExpanded((prev) => (needed.every((p) => prev.has(p)) ? prev : new Set([...prev, ...needed])));
+  };
+  const collapse = (path: string) =>
+    setExpanded((prev) => new Set([...prev].filter((p) => p !== path && !p.startsWith(`${path}/`))));
+
   const select = (id: string) => {
+    const node = index?.node(id);
+    if (id.startsWith("dir:")) reveal(id.slice(4), true);
+    else if (node?.file) reveal(folderOf(node.file), true);
     if (id === selectedId) return;
     setHistory((h) => [...h, id]);
-    const node = index?.node(id);
     if (node && isSymbol(node)) setView("calls");
     // Folders and the guide only exist in the dependency view.
     else if (!node) setView("deps");
@@ -110,8 +130,13 @@ export function App() {
   const callFocus = selected && selected.kind !== "package" ? selected.id : undefined;
   // Kept separate so selecting a file in the dependency view doesn't rebuild (and re-layout) the graph.
   const depsData = useMemo(
-    () => index && { elements: dependencyElements(index, showPackages), truncated: false, layout: DEPS_LAYOUT },
-    [index, showPackages],
+    () =>
+      index && {
+        elements: dependencyElements(index, tree, expanded, showPackages),
+        truncated: false,
+        layout: DEPS_LAYOUT,
+      },
+    [index, tree, expanded, showPackages],
   );
   const callsData = useMemo(
     () => (index && callFocus ? { ...callElements(index, callFocus, depth), layout: CALLS_LAYOUT } : undefined),
@@ -163,10 +188,15 @@ export function App() {
           </button>
         </div>
         {view === "deps" ? (
-          <label>
-            <input type="checkbox" checked={showPackages} onChange={(e) => setShowPackages(e.target.checked)} />
-            Paquetes externos
-          </label>
+          <>
+            <label>
+              <input type="checkbox" checked={showPackages} onChange={(e) => setShowPackages(e.target.checked)} />
+              Paquetes externos
+            </label>
+            <button onClick={() => setExpanded(tree.defaultExpanded())} title="Volver al nivel de detalle inicial">
+              Contraer carpetas
+            </button>
+          </>
         ) : (
           <label>
             Profundidad
@@ -185,8 +215,20 @@ export function App() {
       <Sidebar index={index} selectedId={selectedId} onSelect={select} />
 
       <main className="canvas">
-        <GraphView elements={graphData.elements} layout={graphData.layout} selectedId={selectedId} onSelect={select} />
-        {view === "calls" && <div className="legend">← lo llaman · llama a →</div>}
+        <GraphView
+          elements={graphData.elements}
+          layout={graphData.layout}
+          selectedId={selectedId}
+          onSelect={select}
+          onCollapse={(id) => collapse(id.slice(4))}
+        />
+        {view === "calls" ? (
+          <div className="legend">← lo llaman · llama a →</div>
+        ) : (
+          tree.folders.size > 2 && (
+            <div className="legend">Clic en una carpeta para abrirla · doble clic en un recuadro para cerrarlo</div>
+          )
+        )}
         {graphData.truncated && <div className="legend warn">Hay demasiadas llamadas: se muestran las primeras 40 por nivel</div>}
       </main>
 
@@ -196,6 +238,7 @@ export function App() {
         <FolderDetails
           key={selectedId}
           index={index}
+          tree={tree}
           dir={selectedId.slice(4)}
           onSelect={select}
           resolveLink={resolveLink}

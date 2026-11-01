@@ -64,6 +64,32 @@ const STYLE: StylesheetJson = [
     },
   },
   { selector: "node:selected", style: { "border-width": 3, "border-color": "#ffd166" } },
+  {
+    selector: 'node[kind="folder"]',
+    style: {
+      shape: "round-rectangle",
+      "background-color": "#e0c36c",
+      "background-opacity": 0.85,
+      width: "mapData(size, 1, 80, 34, 110)",
+      height: "mapData(size, 1, 80, 22, 60)",
+      "text-valign": "center",
+      "text-margin-y": 0,
+      color: "#16181d",
+      "font-weight": "bold",
+      "font-size": 11,
+      "text-max-width": "100px",
+    },
+  },
+  {
+    selector: "edge[label]",
+    style: {
+      label: "data(label)",
+      "font-size": 9,
+      color: "#8a93a6",
+      "text-background-color": "#16181d",
+      "text-background-opacity": 1,
+    },
+  },
   { selector: 'node[kind="dir"]:selected', style: { "border-width": 2, "background-opacity": 0.1, color: "#ffd166" } },
   { selector: "edge.highlight", style: { "line-color": "#ffd166", "target-arrow-color": "#ffd166", "z-index": 10 } },
   { selector: "node.faded", style: { opacity: 0.25 } },
@@ -74,19 +100,24 @@ interface Props {
   layout: LayoutOptions;
   selectedId?: string;
   onSelect(id: string): void;
+  /** Double click on an open folder's box. */
+  onCollapse?(id: string): void;
 }
 
-export function GraphView({ elements, layout, selectedId, onSelect }: Props) {
+export function GraphView({ elements, layout, selectedId, onSelect, onCollapse }: Props) {
   const container = useRef<HTMLDivElement>(null);
   const cyRef = useRef<Core | null>(null);
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onCollapseRef = useRef(onCollapse);
+  onCollapseRef.current = onCollapse;
 
   useEffect(() => {
     const cy = cytoscape({ container: container.current, style: STYLE, minZoom: 0.05, maxZoom: 3 });
     cy.on("tap", "node", (event) => {
       onSelectRef.current(event.target.id());
     });
+    cy.on("dbltap", 'node[kind="dir"]', (event) => onCollapseRef.current?.(event.target.id()));
     cyRef.current = cy;
     return () => cy.destroy();
   }, []);

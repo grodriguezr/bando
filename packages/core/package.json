@@ -35,6 +35,10 @@
     "./docs": {
       "types": "./dist/docs.d.ts",
       "default": "./dist/docs.js"
+    },
+    "./folder-tree": {
+      "types": "./dist/folder-tree.d.ts",
+      "default": "./dist/folder-tree.js"
     }
   },
   "scripts": {
