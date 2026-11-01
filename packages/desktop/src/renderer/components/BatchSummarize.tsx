@@ -31,15 +31,26 @@ export function BatchSummarize({ targets, noun, onProgress }: Props) {
     return pending;
   };
 
+  // Re-count when any of our targets is summarized elsewhere (e.g. by the background job).
+  const [updated, setUpdated] = useState(0);
+  useEffect(() => {
+    const keys = new Set(signature.split("|"));
+    return window.bando.onSummaryUpdated((event) => {
+      if (keys.has(event.key)) setUpdated((n) => n + 1);
+    });
+  }, [signature]);
+
   useEffect(() => {
     let cancelled = false;
-    setStatus({ kind: "checking" });
-    void pendingTargets().then((pending) => !cancelled && setStatus({ kind: "ready", pending }));
+    void pendingTargets().then((pending) => {
+      // Our own loop owns the status while it runs.
+      if (!cancelled) setStatus((s) => (s.kind === "running" ? s : { kind: "ready", pending }));
+    });
     return () => {
       cancelled = true;
     };
     // `targets` is identified by `signature`.
-  }, [signature]);
+  }, [signature, updated]);
 
   const run = async (pending: SummaryTarget[]) => {
     stop.current = false;

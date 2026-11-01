@@ -27,6 +27,14 @@
     "./targets": {
       "types": "./dist/targets.d.ts",
       "default": "./dist/targets.js"
+    },
+    "./summary-store": {
+      "types": "./dist/summary-store.d.ts",
+      "default": "./dist/summary-store.js"
+    },
+    "./docs": {
+      "types": "./dist/docs.d.ts",
+      "default": "./dist/docs.js"
     }
   },
   "scripts": {

@@ -1,8 +1,15 @@
 // Plain CommonJS: Electron's sandboxed preloads can't be ES modules.
 const { contextBridge, ipcRenderer } = require("electron");
 
+function subscribe(channel, callback) {
+  const listener = (_event, payload) => callback(payload);
+  ipcRenderer.on(channel, listener);
+  return () => ipcRenderer.removeListener(channel, listener);
+}
+
 contextBridge.exposeInMainWorld("bando", {
   openProject: () => ipcRenderer.invoke("project:open"),
+  currentProject: () => ipcRenderer.invoke("project:current"),
   reanalyze: () => ipcRenderer.invoke("project:reanalyze"),
   readFile: (relativePath) => ipcRenderer.invoke("file:read", relativePath),
   onProjectEvent: (callback) => {
@@ -20,6 +27,12 @@ contextBridge.exposeInMainWorld("bando", {
   setAiSettings: (patch) => ipcRenderer.invoke("settings:set", patch),
   cachedSummary: (target) => ipcRenderer.invoke("summary:cached", target),
   generateSummary: (target) => ipcRenderer.invoke("summary:generate", target),
+  exportDocs: () => ipcRenderer.invoke("docs:export"),
+  getJobStatus: () => ipcRenderer.invoke("job:status"),
+  startJob: () => ipcRenderer.invoke("job:start"),
+  stopJob: () => ipcRenderer.invoke("job:stop"),
+  onJob: (callback) => subscribe("summary:job", callback),
+  onSummaryUpdated: (callback) => subscribe("summary:updated", callback),
   onSummaryDelta: (callback) => {
     const listener = (_event, delta) => callback(delta);
     ipcRenderer.on("summary:delta", listener);

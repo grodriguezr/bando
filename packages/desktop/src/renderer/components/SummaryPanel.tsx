@@ -35,6 +35,8 @@ export function SummaryPanel({ target, title = "Resumen con IA", resolveLink, re
   const key = summaryKey(target);
   const [state, setState] = useState<State>({ status: "checking" });
   const [settings, setSettings] = useState<AiSettings>();
+  /** Bumped when this summary is stored by someone else (e.g. the background job). */
+  const [updated, setUpdated] = useState(0);
 
   useEffect(() => {
     void window.bando.getAiSettings().then(setSettings);
@@ -54,16 +56,22 @@ export function SummaryPanel({ target, title = "Resumen con IA", resolveLink, re
       cancelled = true;
     };
     // `target` is identified by `key`: depending on the object itself would re-run on every render.
-  }, [key, settings?.provider, refreshKey]);
+  }, [key, settings?.provider, refreshKey, updated]);
 
-  useEffect(
-    () =>
-      window.bando.onSummaryDelta((delta) => {
-        if (delta.key !== key) return;
-        setState((s) => (s.status === "generating" ? { ...s, text: s.text + delta.text } : s));
-      }),
-    [key],
-  );
+  // Text can also arrive from the background job, not only from our own request.
+  useEffect(() => {
+    const offDelta = window.bando.onSummaryDelta((delta) => {
+      if (delta.key !== key) return;
+      setState((s) => ({ status: "generating", text: (s.status === "generating" ? s.text : "") + delta.text }));
+    });
+    const offUpdated = window.bando.onSummaryUpdated((event) => {
+      if (event.key === key) setUpdated((n) => n + 1);
+    });
+    return () => {
+      offDelta();
+      offUpdated();
+    };
+  }, [key]);
 
   const generate = async () => {
     setState({ status: "generating", text: "" });

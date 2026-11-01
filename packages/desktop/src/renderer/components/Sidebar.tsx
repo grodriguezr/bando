@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import type { GraphIndex } from "@bando/core/query";
 import type { CodeNode } from "@bando/core/types";
 import { symbolName } from "../elements";
+import { ExportDocs } from "./ExportDocs";
+import { JobCard } from "./JobCard";
 
 interface Props {
   index: GraphIndex;
@@ -88,6 +90,8 @@ function Overview({ index, onSelect }: { index: GraphIndex; onSelect(id: string)
         <strong>Guía para empezar</strong>
         <span className="muted small">Arquitectura, flujos y qué leer primero, generada con IA</span>
       </button>
+      <JobCard onSelect={onSelect} />
+      <ExportDocs />
       <div className="stats">
         <Stat value={stats.files} label="archivos" />
         <Stat value={stats.symbols} label="símbolos" />

@@ -264,3 +264,16 @@ button.link {
   color: var(--accent);
   cursor: pointer;
 }
+.markdown code.missing-ref { color: var(--error); text-decoration: line-through dotted; cursor: help; }
+.job-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+.job-card progress { width: 100%; }

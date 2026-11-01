@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { looksLikeSourceFile } from "@bando/core/targets";
 
 /** Returns a click handler when inline code names something navigable (a file, folder or symbol). */
 export type LinkResolver = (code: string) => (() => void) | undefined;
@@ -129,7 +130,17 @@ function renderInline(text: string, resolveLink: LinkResolver | undefined): Reac
 
 function codeSpan(code: string, key: number, resolveLink: LinkResolver | undefined): ReactNode {
   const onClick = resolveLink?.(code);
-  if (!onClick) return <code key={key}>{code}</code>;
+  if (!onClick) {
+    // A file path we can't resolve was most likely invented by the model.
+    const missing = resolveLink && looksLikeSourceFile(code.trim());
+    return missing ? (
+      <code key={key} className="missing-ref" title="Este archivo no existe en el proyecto analizado">
+        {code}
+      </code>
+    ) : (
+      <code key={key}>{code}</code>
+    );
+  }
   return (
     <button key={key} className="code-link" onClick={onClick} title="Ir a…">
       <code>{code}</code>

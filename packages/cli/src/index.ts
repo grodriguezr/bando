@@ -3,8 +3,11 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { analyzeProject, GraphIndex, type CodeGraph, type CodeNode } from "@bando/core";
+import { exportDocs } from "@bando/core/docs";
+import { SummaryStore } from "@bando/core/summary-store";
 import {
   describeSummaryError,
+  findUnknownReferences,
   listFolders,
   summarize as summarizeWithAi,
   type SummaryProvider,
@@ -17,7 +20,10 @@ const USAGE = `Uso:
   bando mermaid [-g graph.json] [--packages]                     Diagrama Mermaid de dependencias entre archivos
   bando summarize <archivo|carpeta> [-g graph.json]              Resume un archivo o carpeta con Claude (requiere ANTHROPIC_API_KEY)
   bando guide [-g graph.json]                                    Guía "por dónde empezar" para todo el proyecto
-    --local [--url http://localhost:1234/v1] [--model id]        (summarize y guide) usa un modelo local: LM Studio, Ollama…`;
+  bando summarize-all [-g graph.json]                            Resume archivos, carpetas y la guía (retoma si se interrumpe)
+  bando docs [-o docs] [-g graph.json]                           Exporta la documentación en Markdown con los resúmenes guardados
+    --local [--url http://localhost:1234/v1] [--model id]        Usa un modelo local (LM Studio, Ollama…) en lugar de Claude
+  Los resúmenes se guardan en una caché compartida con la app de escritorio.`;
 
 const DEFAULT_GRAPH = "graph.json";
 
@@ -26,7 +32,7 @@ async function main(argv: string[]): Promise<void> {
     args: argv,
     allowPositionals: true,
     options: {
-      output: { type: "string", short: "o", default: DEFAULT_GRAPH },
+      output: { type: "string", short: "o" },
       graph: { type: "string", short: "g", default: DEFAULT_GRAPH },
       tsconfig: { type: "string" },
       packages: { type: "boolean", default: false },
@@ -39,17 +45,19 @@ async function main(argv: string[]): Promise<void> {
   const [command, arg] = positionals;
 
   if (values.help || !command) return console.log(USAGE);
-  if (command === "analyze") return analyze(arg ?? ".", values.output, values.tsconfig);
+  if (command === "analyze") return analyze(arg ?? ".", values.output ?? DEFAULT_GRAPH, values.tsconfig);
   if (command === "inspect" && arg) return inspect(loadGraph(values.graph), arg);
   if (command === "mermaid") return console.log(mermaid(loadGraph(values.graph), values.packages));
-  const provider: SummaryProvider | undefined = values.local
+  const provider: SummaryProvider = values.local
     ? { kind: "local", baseUrl: values.url, model: values.model }
-    : undefined;
+    : { kind: "anthropic" };
   if (command === "summarize" && arg) {
     const graph = loadGraph(values.graph);
     return summarize(graph, resolveTarget(graph, arg), provider);
   }
   if (command === "guide") return summarize(loadGraph(values.graph), { kind: "project" }, provider);
+  if (command === "summarize-all") return summarizeAll(loadGraph(values.graph), provider);
+  if (command === "docs") return docs(loadGraph(values.graph), values.graph, values.output ?? "docs", provider);
 
   console.error(USAGE);
   process.exitCode = 1;
@@ -147,17 +155,75 @@ function inspect(graph: CodeGraph, query: string): void {
   }
 }
 
-async function summarize(graph: CodeGraph, target: SummaryTarget, provider?: SummaryProvider): Promise<void> {
+async function summarize(graph: CodeGraph, target: SummaryTarget, provider: SummaryProvider): Promise<void> {
   const label = target.kind === "project" ? "el proyecto" : target.id;
   try {
     console.error(`· Resumiendo ${label}…\n`);
     const started = Date.now();
-    const { model } = await summarizeWithAi(graph, target, { provider, onText: (text) => process.stdout.write(text) });
+    const { text, model } = await new SummaryStore().generate(graph, target, {
+      provider,
+      onText: (delta) => process.stdout.write(delta),
+    });
     console.error(`\n\n· Generado con ${model} en ${((Date.now() - started) / 1000).toFixed(1)} s`);
+    warnUnknownReferences(graph, text);
   } catch (error) {
     console.error(`\n${describeSummaryError(error)}`);
     process.exitCode = 1;
   }
+}
+
+async function summarizeAll(graph: CodeGraph, provider: SummaryProvider): Promise<void> {
+  const started = Date.now();
+  const label = (t: SummaryTarget) => (t.kind === "project" ? "guía del proyecto" : t.kind === "folder" ? `${t.id}/` : t.id);
+  let stop = false;
+  process.once("SIGINT", () => {
+    stop = true;
+    console.error("\n· Deteniendo al terminar el resumen actual (Ctrl+C otra vez para salir ya)…");
+    process.once("SIGINT", () => process.exit(130));
+  });
+  await new SummaryStore().summarizeAll(graph, {
+    provider,
+    shouldStop: () => stop,
+    onEvent: (event) => {
+      if (event.type === "start") {
+        console.error(event.total ? `· ${event.total} resúmenes pendientes` : "· Todo está al día.");
+      } else if (event.type === "progress") {
+        const elapsed = Date.now() - started;
+        const eta = event.done ? ` · ~${Math.round(((elapsed / event.done) * (event.total - event.done)) / 60_000)} min restantes` : "";
+        console.error(`[${event.done + 1}/${event.total}] ${label(event.target)}${eta}`);
+      } else if (event.type === "summarized" && event.error) {
+        console.error(`  ✖ ${event.error}`);
+      } else if (event.type === "finished" && event.total > 0) {
+        const minutes = ((Date.now() - started) / 60_000).toFixed(1);
+        console.error(
+          `· ${event.stopped ? "Detenido" : "Listo"}: ${event.done - event.failed} de ${event.total} resumidos` +
+            `${event.failed ? `, ${event.failed} con error` : ""} en ${minutes} min.`,
+        );
+        if (event.failed) process.exitCode = 1;
+      }
+    },
+  });
+}
+
+function docs(graph: CodeGraph, graphFile: string, outDir: string, provider: SummaryProvider): void {
+  const summaries = new SummaryStore().known(graph.root, provider.kind);
+  const result = exportDocs(graph, { outDir, summaries });
+  const { summarized: s } = result;
+  console.log(`Documentación escrita en ${result.outDir} (${result.pages} páginas).`);
+  console.log(
+    `  Con resumen de IA: ${s.files}/${s.totalFiles} archivos, ${s.folders}/${s.totalFolders} carpetas, ` +
+      `guía: ${s.guide ? "sí" : "no"}.`,
+  );
+  if (s.files < s.totalFiles || s.folders < s.totalFolders || !s.guide) {
+    const local = provider.kind === "local" ? " --local" : "";
+    console.log(`  Para completarla: bando summarize-all -g ${graphFile}${local} y vuelve a exportar.`);
+  }
+  console.log(`  Ábrela en: ${path.join(result.outDir, "README.md")}`);
+}
+
+function warnUnknownReferences(graph: CodeGraph, text: string): void {
+  const unknown = findUnknownReferences(graph, text);
+  if (unknown.length) console.error(`⚠ Menciona archivos que no existen en el proyecto: ${unknown.join(", ")}`);
 }
 
 /** Accepts a graph id ("src/a.ts", "src/a") or a path relative to the current directory. */

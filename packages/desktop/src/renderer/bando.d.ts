@@ -1,8 +1,22 @@
 import type { CodeGraph } from "@bando/core/types";
 
 import type { SummaryTarget } from "@bando/core/targets";
+import type { ExportDocsResult } from "@bando/core/docs";
 
 export type SummaryResult = { text: string; model: string; stale?: boolean } | { error: string };
+
+/** State of the "summarize everything" job. */
+export type JobStatus =
+  | { running: false; last?: { done: number; total: number; failed: number; stopped: boolean; error?: string } }
+  | {
+      running: true;
+      done: number;
+      total: number;
+      failed: number;
+      current?: SummaryTarget;
+      startedAt: number;
+      stopping: boolean;
+    };
 
 export interface AiSettings {
   provider: "anthropic" | "local";
@@ -16,6 +30,8 @@ declare global {
     bando: {
       openProject(): Promise<CodeGraph | undefined>;
       reanalyze(): Promise<CodeGraph | undefined>;
+      /** The project already open in the main process, if any (e.g. after reloading the window). */
+      currentProject(): Promise<CodeGraph | undefined>;
       readFile(relativePath: string): Promise<string>;
       /** Fired when the app was launched with a project path. */
       onProjectEvent(
@@ -30,6 +46,16 @@ declare global {
       /** Generates a summary with the configured provider, streaming text through onSummaryDelta. */
       generateSummary(target: SummaryTarget): Promise<SummaryResult>;
       /** `key` is the target's summaryKey: "file:<id>", "folder:<dir>" or "project". */
+      /** Asks for a folder and writes the Markdown docs there; undefined if cancelled. */
+      exportDocs(): Promise<ExportDocsResult | undefined>;
+      getJobStatus(): Promise<JobStatus>;
+      /** Summarizes every file, then every folder, then the guide, in the background. */
+      startJob(): Promise<JobStatus>;
+      /** Stops after the summary in progress. */
+      stopJob(): Promise<void>;
+      onJob(callback: (status: JobStatus) => void): () => void;
+      /** A summary was stored (by a manual request or by the job). */
+      onSummaryUpdated(callback: (event: { key: string }) => void): () => void;
       onSummaryDelta(callback: (delta: { key: string; text: string }) => void): () => void;
       onProgress(callback: (message: string) => void): () => void;
     };

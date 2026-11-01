@@ -37,6 +37,9 @@ export function App() {
   const [depth, setDepth] = useState(1);
 
   useEffect(() => window.bando.onProgress(setProgress), []);
+  useEffect(() => {
+    void window.bando.currentProject().then((current) => current && setGraph((g) => g ?? current));
+  }, []);
   useEffect(
     () =>
       window.bando.onProjectEvent((event) => {

@@ -1,18 +1,10 @@
-import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { app } from "electron";
 import type { CodeGraph } from "@bando/core/types";
-import {
-  buildSummaryPrompt,
-  DEFAULT_LOCAL_URL,
-  describeSummaryError,
-  SUMMARY_PROMPT_VERSION,
-  summarize,
-  summaryKey,
-  type SummaryProvider,
-  type SummaryTarget,
-} from "@bando/core/summarize";
+import { DEFAULT_LOCAL_URL, describeSummaryError, type SummaryProvider, type SummaryTarget } from "@bando/core/summarize";
+import { SummaryStore, type SummarizeAllEvent } from "@bando/core/summary-store";
+import { exportDocs, type ExportDocsResult } from "@bando/core/docs";
 
 export type ProviderKind = SummaryProvider["kind"];
 
@@ -26,117 +18,131 @@ export interface AiSettings {
 
 export type SummaryResult = { text: string; model: string; stale?: boolean } | { error: string };
 
-interface Entry {
-  /** Hash of the exact request the summary was generated from. */
-  hash: string;
-  text: string;
-  model: string;
-  createdAt: string;
-}
+/** State of the "summarize everything" job, as shown in the UI. */
+export type JobStatus =
+  | { running: false; last?: { done: number; total: number; failed: number; stopped: boolean; error?: string } }
+  | {
+      running: true;
+      done: number;
+      total: number;
+      failed: number;
+      current?: SummaryTarget;
+      startedAt: number;
+      stopping: boolean;
+    };
 
 const DEFAULT_SETTINGS: AiSettings = { provider: "anthropic", localUrl: DEFAULT_LOCAL_URL, localModel: "" };
 
 /**
- * Generates summaries of files, folders and the whole project, and caches them on disk per
- * project and provider. A summary is flagged as stale when the request it would be generated
- * from changes: the file's code, or the summaries of the parts a folder or the guide build on.
+ * The desktop side of summaries: user settings (which provider), the shared on-disk store
+ * (also used by the CLI) and the background job that summarizes the whole project.
  */
 export class SummaryService {
-  private readonly dir = app.getPath("userData");
-  private cache: Record<string, Entry> | undefined;
+  private readonly store = new SummaryStore();
+  private readonly settingsFile = path.join(app.getPath("userData"), "settings.json");
   private settingsCache: AiSettings | undefined;
-  private readonly inFlight = new Map<string, Promise<SummaryResult>>();
+  private job: JobStatus = { running: false };
+  private stopRequested = false;
+
+  constructor(
+    private readonly events: {
+      delta(target: SummaryTarget, text: string): void;
+      job(status: JobStatus): void;
+      summarized(target: SummaryTarget): void;
+    },
+  ) {}
 
   async settings(): Promise<AiSettings> {
-    this.settingsCache ??= { ...DEFAULT_SETTINGS, ...(await readJson<Partial<AiSettings>>(this.file("settings"))) };
+    if (!this.settingsCache) {
+      let saved: Partial<AiSettings> = {};
+      try {
+        saved = JSON.parse(await fs.readFile(this.settingsFile, "utf8")) as Partial<AiSettings>;
+      } catch {
+        // First run.
+      }
+      this.settingsCache = { ...DEFAULT_SETTINGS, ...saved };
+    }
     return this.settingsCache;
   }
 
   async updateSettings(patch: Partial<AiSettings>): Promise<AiSettings> {
+    if (this.job.running && patch.provider) throw new Error("No se puede cambiar de proveedor mientras se resume todo");
     this.settingsCache = { ...(await this.settings()), ...patch };
-    await fs.writeFile(this.file("settings"), JSON.stringify(this.settingsCache, null, 2));
+    await fs.writeFile(this.settingsFile, JSON.stringify(this.settingsCache, null, 2));
     return this.settingsCache;
   }
 
   async cached(graph: CodeGraph, target: SummaryTarget): Promise<SummaryResult | undefined> {
     const { provider } = await this.settings();
-    const cache = await this.load();
-    const entry = cache[cacheKey(provider, graph.root, target)];
-    if (!entry) return undefined;
-    let stale = true;
-    try {
-      stale = entry.hash !== hashOf(buildSummaryPrompt(graph, target, { summaries: this.known(cache, provider, graph.root) }));
-    } catch {
-      // The file was deleted or can't be read: keep showing the old summary, flagged as stale.
-    }
-    return { text: entry.text, model: entry.model, stale };
+    return this.store.cached(graph, target, provider);
   }
 
   async generate(graph: CodeGraph, target: SummaryTarget, onText: (delta: string) => void): Promise<SummaryResult> {
-    const settings = await this.settings();
-    const k = cacheKey(settings.provider, graph.root, target);
-    // A second request for the same target (e.g. the user navigated away and back) joins the running one.
-    const running = this.inFlight.get(k);
-    if (running) return running;
+    try {
+      const result = await this.store.generate(graph, target, { provider: await this.provider(), onText });
+      this.events.summarized(target);
+      return result;
+    } catch (error) {
+      return { error: describeSummaryError(error) };
+    }
+  }
 
-    const provider: SummaryProvider =
-      settings.provider === "local"
-        ? { kind: "local", baseUrl: settings.localUrl, model: settings.localModel || undefined }
-        : { kind: "anthropic" };
+  /** Writes the Markdown docs with every summary stored for the current provider. */
+  async exportDocs(graph: CodeGraph, outDir: string): Promise<ExportDocsResult> {
+    const { provider } = await this.settings();
+    return exportDocs(graph, { outDir, summaries: this.store.known(graph.root, provider) });
+  }
 
-    const task = (async (): Promise<SummaryResult> => {
-      try {
-        const cache = await this.load();
-        const summaries = this.known(cache, settings.provider, graph.root);
-        const request = buildSummaryPrompt(graph, target, { summaries });
-        const { text, model } = await summarize(graph, target, { provider, summaries, onText });
-        cache[k] = { hash: hashOf(request), text, model, createdAt: new Date().toISOString() };
-        await fs.writeFile(this.file("summaries"), JSON.stringify(cache));
-        return { text, model };
-      } catch (error) {
-        return { error: describeSummaryError(error) };
-      } finally {
-        this.inFlight.delete(k);
+  jobStatus(): JobStatus {
+    return this.job;
+  }
+
+  /** Starts summarizing every file, folder and the guide. Returns immediately; progress arrives as events. */
+  async startJob(graph: CodeGraph): Promise<JobStatus> {
+    if (this.job.running) return this.job;
+    const provider = await this.provider();
+    this.stopRequested = false;
+    this.setJob({ running: true, done: 0, total: 0, failed: 0, startedAt: Date.now(), stopping: false });
+
+    let lastError: string | undefined;
+    const onEvent = (event: SummarizeAllEvent) => {
+      if (!this.job.running) return;
+      if (event.type === "start") this.setJob({ ...this.job, total: event.total });
+      else if (event.type === "progress") this.setJob({ ...this.job, done: event.done, current: event.target, failed: event.failed });
+      else if (event.type === "summarized") {
+        if (event.error) lastError = event.error;
+        else this.events.summarized(event.target);
+      } else {
+        this.setJob({ running: false, last: { ...event, error: lastError } });
       }
-    })();
-    this.inFlight.set(k, task);
-    return task;
+    };
+    void this.store
+      .summarizeAll(graph, {
+        provider,
+        onEvent,
+        onText: (target, text) => this.events.delta(target, text),
+        shouldStop: () => this.stopRequested,
+      })
+      .catch((error: unknown) => {
+        this.setJob({ running: false, last: { done: 0, total: 0, failed: 1, stopped: true, error: describeSummaryError(error) } });
+      });
+    return this.job;
   }
 
-  /** Every summary of this project and provider, keyed by `summaryKey`. */
-  private known(cache: Record<string, Entry>, provider: ProviderKind, root: string): Map<string, string> {
-    const prefix = `${provider}::${root}::`;
-    return new Map(
-      Object.entries(cache)
-        .filter(([k]) => k.startsWith(prefix))
-        .map(([k, entry]) => [k.slice(prefix.length), entry.text]),
-    );
+  stopJob(): void {
+    this.stopRequested = true;
+    if (this.job.running) this.setJob({ ...this.job, stopping: true });
   }
 
-  private async load(): Promise<Record<string, Entry>> {
-    this.cache ??= (await readJson<Record<string, Entry>>(this.file("summaries"))) ?? {};
-    return this.cache;
+  private setJob(status: JobStatus): void {
+    this.job = status;
+    this.events.job(status);
   }
 
-  private file(name: string): string {
-    return path.join(this.dir, `${name}.json`);
-  }
-}
-
-function cacheKey(provider: ProviderKind, root: string, target: SummaryTarget): string {
-  return `${provider}::${root}::${summaryKey(target)}`;
-}
-
-function hashOf(request: { system: string; prompt: string }): string {
-  return createHash("sha256")
-    .update(`${SUMMARY_PROMPT_VERSION}\n${request.system}\n${request.prompt}`)
-    .digest("hex");
-}
-
-async function readJson<T>(file: string): Promise<T | undefined> {
-  try {
-    return JSON.parse(await fs.readFile(file, "utf8")) as T;
-  } catch {
-    return undefined;
+  private async provider(): Promise<SummaryProvider> {
+    const settings = await this.settings();
+    return settings.provider === "local"
+      ? { kind: "local", baseUrl: settings.localUrl, model: settings.localModel || undefined }
+      : { kind: "anthropic" };
   }
 }

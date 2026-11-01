@@ -14,15 +14,24 @@ export {
   type GenerateOptions,
   type SummaryProvider,
 } from "./llm.js";
-export { folderOf, listFolders, summaryKey, type SummaryTarget } from "./targets.js";
+export {
+  findUnknownReferences,
+  folderOf,
+  listFolders,
+  looksLikeSourceFile,
+  summaryKey,
+  type SummaryTarget,
+} from "./targets.js";
 
 /** Bump when a prompt changes so cached summaries are flagged as stale. */
-export const SUMMARY_PROMPT_VERSION = 2;
+export const SUMMARY_PROMPT_VERSION = 3;
 
 /** Beyond this the file is almost certainly generated or bundled code, not something worth summarizing. */
 const MAX_SOURCE_CHARS = 400_000;
 const MAX_README_CHARS = 8_000;
 const MAX_FOLDERS_IN_GUIDE = 80;
+/** Up to this many files, the guide lists every file so the model never has to guess paths. */
+const MAX_FILES_LISTED_IN_GUIDE = 400;
 
 export interface SummaryContext {
   /**
@@ -171,6 +180,7 @@ Qué partes del proyecto usa y cuáles la usan a ella. Indica si parece una capa
 Lo que conviene saber antes de trabajar aquí.
 
 Menciona archivos y carpetas con su ruta exacta entre comillas invertidas, como \`src/app/main.ts\`.
+Menciona solo archivos y carpetas que aparezcan en los datos: no inventes rutas.
 Sé concreto y breve. Si a algunos archivos les falta el resumen, básate en sus nombres y exportaciones y dilo cuando infieras.`;
 
 function folderPrompt(index: GraphIndex, dir: string, summaries: ReadonlyMap<string, string>): string {
@@ -261,6 +271,7 @@ Términos, tipos o abstracciones del dominio que conviene entender primero.
 Comandos para instalar, ejecutar y probar, si se desprenden del package.json o el README.
 
 Menciona archivos y carpetas con su ruta exacta entre comillas invertidas, como \`src/app/main.ts\`, tal como aparecen en los datos.
+Menciona solo archivos que estén en la lista de carpetas y archivos: no inventes rutas ni nombres de archivo.
 Sé concreto: el lector quiere orientarse en minutos. Distingue lo que ves en los datos de lo que infieres.`;
 
 function projectPrompt(index: GraphIndex, summaries: ReadonlyMap<string, string>): string {
@@ -287,6 +298,7 @@ function projectPrompt(index: GraphIndex, summaries: ReadonlyMap<string, string>
     .map((dir) => ({ dir, files: files.filter((f) => folderOf(f.id) === dir) }))
     .sort((a, b) => b.files.length - a.files.length);
   const shown = folders.slice(0, MAX_FOLDERS_IN_GUIDE).sort((a, b) => a.dir.localeCompare(b.dir));
+  const listAllFiles = files.length <= MAX_FILES_LISTED_IN_GUIDE;
   let missing = 0;
   sections.push(
     `Carpetas (${folders.length}):\n` +
@@ -295,13 +307,16 @@ function projectPrompt(index: GraphIndex, summaries: ReadonlyMap<string, string>
           const purpose = purposeOf(summaries.get(`folder:${dir}`));
           if (!purpose) missing++;
           const names = inDir.map((f) => f.name);
-          const list = names.slice(0, 8).join(", ") + (names.length > 8 ? `, … (+${names.length - 8})` : "");
-          return `- ${dir} (${inDir.length} archivos)\n  ${purpose ? `Propósito: ${purpose}` : `Archivos: ${list}`}`;
+          const limit = listAllFiles ? Infinity : 8;
+          const list = names.slice(0, limit).join(", ") + (names.length > limit ? `, … (+${names.length - limit})` : "");
+          return [`- ${dir} (${inDir.length} archivos)`, purpose && `  Propósito: ${purpose}`, `  Archivos: ${list}`]
+            .filter(Boolean)
+            .join("\n");
         })
         .join("\n") +
       (folders.length > shown.length ? `\n(Se omiten ${folders.length - shown.length} carpetas pequeñas.)` : ""),
   );
-  if (missing) sections.push(`(${missing} carpetas todavía no tienen resumen; para ellas solo se listan sus archivos.)`);
+  if (missing) sections.push(`(${missing} carpetas todavía no tienen resumen.)`);
 
   const folderDeps = new Map<string, number>();
   const packages = new Map<string, number>();

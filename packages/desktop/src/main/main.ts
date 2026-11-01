@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
 import type { CodeGraph } from "@bando/core/types";
 import { summaryKey, type SummaryTarget } from "@bando/core/summarize";
 import { SummaryService, type AiSettings } from "./summaries.js";
@@ -13,7 +13,14 @@ let window: BrowserWindow | undefined;
 let currentRoot: string | undefined;
 /** The last completed analysis; summaries use it for context about the module. */
 let currentGraph: CodeGraph | undefined;
-const summaries = new SummaryService();
+const send = (channel: string, payload: unknown) => {
+  if (window && !window.isDestroyed()) window.webContents.send(channel, payload);
+};
+const summaries = new SummaryService({
+  delta: (target, text) => send("summary:delta", { key: summaryKey(target), text }),
+  job: (status) => send("summary:job", status),
+  summarized: (target) => send("summary:updated", { key: summaryKey(target) }),
+});
 
 function createWindow(): void {
   window = new BrowserWindow({
@@ -76,6 +83,9 @@ ipcMain.handle("project:open", async () => {
   return analyze(currentRoot);
 });
 
+// Lets the window recover the open project after a reload (⌘R) instead of showing the welcome screen.
+ipcMain.handle("project:current", () => currentGraph);
+
 ipcMain.handle("project:reanalyze", () => (currentRoot ? analyze(currentRoot) : undefined));
 
 ipcMain.handle("file:read", async (_event, relativePath: string) => {
@@ -93,13 +103,28 @@ ipcMain.handle("summary:cached", (_event, target: SummaryTarget) =>
   currentGraph ? summaries.cached(currentGraph, target).catch(() => undefined) : undefined,
 );
 
-ipcMain.handle("summary:generate", (event, target: SummaryTarget) => {
+ipcMain.handle("summary:generate", (_event, target: SummaryTarget) => {
   if (!currentGraph) return { error: "No hay proyecto abierto" };
-  const key = summaryKey(target);
-  return summaries.generate(currentGraph, target, (text) => {
-    if (!event.sender.isDestroyed()) event.sender.send("summary:delta", { key, text });
-  });
+  return summaries.generate(currentGraph, target, (text) => send("summary:delta", { key: summaryKey(target), text }));
 });
+
+ipcMain.handle("docs:export", async () => {
+  if (!currentGraph) throw new Error("No hay proyecto abierto");
+  const result = await dialog.showOpenDialog(window!, {
+    title: "Elegir carpeta para la documentación",
+    defaultPath: path.join(currentGraph.root, "docs"),
+    buttonLabel: "Exportar aquí",
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (result.canceled || !result.filePaths[0]) return undefined;
+  const exported = await summaries.exportDocs(currentGraph, result.filePaths[0]);
+  shell.showItemInFolder(path.join(exported.outDir, "README.md"));
+  return exported;
+});
+
+ipcMain.handle("job:status", () => summaries.jobStatus());
+ipcMain.handle("job:start", () => (currentGraph ? summaries.startJob(currentGraph) : summaries.jobStatus()));
+ipcMain.handle("job:stop", () => summaries.stopJob());
 
 app.whenReady().then(createWindow);
 app.on("window-all-closed", () => app.quit());
