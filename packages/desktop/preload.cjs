@@ -16,6 +16,8 @@ contextBridge.exposeInMainWorld("bando", {
       for (const [channel, listener] of Object.entries(listeners)) ipcRenderer.removeListener(channel, listener);
     };
   },
+  getAiSettings: () => ipcRenderer.invoke("settings:get"),
+  setAiSettings: (patch) => ipcRenderer.invoke("settings:set", patch),
   cachedSummary: (fileId) => ipcRenderer.invoke("summary:cached", fileId),
   generateSummary: (fileId) => ipcRenderer.invoke("summary:generate", fileId),
   onSummaryDelta: (callback) => {

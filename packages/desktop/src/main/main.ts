@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Worker } from "node:worker_threads";
 import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import type { CodeGraph } from "@bando/core/types";
-import { SummaryService } from "./summaries.js";
+import { SummaryService, type AiSettings } from "./summaries.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 let window: BrowserWindow | undefined;
@@ -84,6 +84,9 @@ ipcMain.handle("file:read", async (_event, relativePath: string) => {
   if (path.relative(currentRoot, full).startsWith("..")) throw new Error("Ruta fuera del proyecto");
   return fs.readFile(full, "utf8");
 });
+
+ipcMain.handle("settings:get", () => summaries.settings());
+ipcMain.handle("settings:set", (_event, patch: Partial<AiSettings>) => summaries.updateSettings(patch));
 
 ipcMain.handle("summary:cached", (_event, fileId: string) =>
   currentGraph ? summaries.cached(currentGraph.root, fileId).catch(() => undefined) : undefined,

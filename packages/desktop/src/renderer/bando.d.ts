@@ -1,6 +1,12 @@
 import type { CodeGraph } from "@bando/core/types";
 
-export type SummaryResult = { text: string; stale?: boolean } | { error: string };
+export type SummaryResult = { text: string; model: string; stale?: boolean } | { error: string };
+
+export interface AiSettings {
+  provider: "anthropic" | "local";
+  localUrl: string;
+  localModel: string;
+}
 
 /** API exposed by preload.cjs. */
 declare global {
@@ -15,6 +21,8 @@ declare global {
           event: { type: "loading" } | { type: "loaded"; graph: CodeGraph } | { type: "error"; message: string },
         ) => void,
       ): () => void;
+      getAiSettings(): Promise<AiSettings>;
+      setAiSettings(patch: Partial<AiSettings>): Promise<AiSettings>;
       /** Summary previously generated for the file, if any; `stale` if the file changed since. */
       cachedSummary(fileId: string): Promise<SummaryResult | undefined>;
       /** Generates a module summary with Claude, streaming text through onSummaryDelta. */

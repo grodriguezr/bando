@@ -3,13 +3,14 @@ import fs from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
 import { analyzeProject, GraphIndex, type CodeGraph, type CodeNode } from "@bando/core";
-import { describeSummaryError, summarizeModule } from "@bando/core/summarize";
+import { describeSummaryError, summarizeModule, type SummaryProvider } from "@bando/core/summarize";
 
 const USAGE = `Uso:
   bando analyze <directorio> [-o graph.json] [--tsconfig ruta]   Analiza un proyecto y guarda el grafo
   bando inspect <símbolo> [-g graph.json]                        Muestra quién llama a un símbolo y a quién llama
   bando mermaid [-g graph.json] [--packages]                     Diagrama Mermaid de dependencias entre archivos
-  bando summarize <archivo> [-g graph.json]                      Resume un módulo con IA (requiere ANTHROPIC_API_KEY)`;
+  bando summarize <archivo> [-g graph.json]                      Resume un módulo con Claude (requiere ANTHROPIC_API_KEY)
+    --local [--url http://localhost:1234/v1] [--model id]        …o con un modelo local (LM Studio, Ollama, llama.cpp)`;
 
 const DEFAULT_GRAPH = "graph.json";
 
@@ -22,6 +23,9 @@ async function main(argv: string[]): Promise<void> {
       graph: { type: "string", short: "g", default: DEFAULT_GRAPH },
       tsconfig: { type: "string" },
       packages: { type: "boolean", default: false },
+      local: { type: "boolean", default: false },
+      url: { type: "string" },
+      model: { type: "string" },
       help: { type: "boolean", short: "h" },
     },
   });
@@ -31,7 +35,7 @@ async function main(argv: string[]): Promise<void> {
   if (command === "analyze") return analyze(arg ?? ".", values.output, values.tsconfig);
   if (command === "inspect" && arg) return inspect(loadGraph(values.graph), arg);
   if (command === "mermaid") return console.log(mermaid(loadGraph(values.graph), values.packages));
-  if (command === "summarize" && arg) return summarize(loadGraph(values.graph), arg);
+  if (command === "summarize" && arg) return summarize(loadGraph(values.graph), arg, values.local ? { kind: "local", baseUrl: values.url, model: values.model } : undefined);
 
   console.error(USAGE);
   process.exitCode = 1;
@@ -129,7 +133,7 @@ function inspect(graph: CodeGraph, query: string): void {
   }
 }
 
-async function summarize(graph: CodeGraph, file: string): Promise<void> {
+async function summarize(graph: CodeGraph, file: string, provider?: SummaryProvider): Promise<void> {
   // Accept the graph id ("src/a.ts") or a path relative to the current directory.
   const fileId = graph.nodes.some((n) => n.id === file && n.kind === "file")
     ? file
@@ -137,8 +141,12 @@ async function summarize(graph: CodeGraph, file: string): Promise<void> {
   try {
     const source = fs.readFileSync(path.join(graph.root, fileId), "utf8");
     console.error(`· Resumiendo ${fileId}…\n`);
-    await summarizeModule(graph, fileId, source, { onText: (text) => process.stdout.write(text) });
-    process.stdout.write("\n");
+    const started = Date.now();
+    const { model } = await summarizeModule(graph, fileId, source, {
+      provider,
+      onText: (text) => process.stdout.write(text),
+    });
+    console.error(`\n\n· Generado con ${model} en ${((Date.now() - started) / 1000).toFixed(1)} s`);
   } catch (error) {
     console.error(`\n${describeSummaryError(error)}`);
     process.exitCode = 1;
