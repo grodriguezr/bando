@@ -8,6 +8,9 @@ import type { CodeGraph } from "@bando/core/types";
 import { summaryKey, type SummaryTarget } from "@bando/core/summarize";
 import { SummaryService, type AiSettings } from "./summaries.js";
 
+// The same name (and settings folder) whether run from the repository or installed.
+app.setName("Bando");
+
 const here = path.dirname(fileURLToPath(import.meta.url));
 let window: BrowserWindow | undefined;
 let currentRoot: string | undefined;

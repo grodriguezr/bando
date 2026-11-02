@@ -41,6 +41,23 @@ Bando solo lee el proyecto analizado: nunca lo modifica.
 
 ## Instalación
 
+### App para macOS (Apple Silicon)
+
+1. Descarga `Bando-<versión>-arm64.dmg` de la página de
+   [Releases](https://github.com/grodriguezr/bando/releases/latest).
+2. Ábrelo y arrastra **Bando** a **Aplicaciones**.
+3. La primera vez, macOS bloquea la app porque no está firmada con una cuenta de desarrollador de Apple. Ábrela una
+   vez (aparecerá el aviso), ve a **Ajustes del Sistema → Privacidad y seguridad** y presiona **Abrir igualmente**.
+   También puedes quitar el bloqueo desde la terminal:
+
+   ```bash
+   xattr -dr com.apple.quarantine /Applications/Bando.app
+   ```
+
+La app no necesita Node.js. Para usar la CLI o desarrollar, instala desde el código:
+
+### Desde el código
+
 ```bash
 npm install
 npm run build
@@ -112,4 +129,8 @@ npm test               # tests del core (node:test)
 npm run typecheck      # verifica tipos en todos los paquetes
 npm run format         # formatea con Prettier
 npm run desktop        # app con recarga en caliente
+npm run package        # instalador de la app en packages/desktop/release/dist (.dmg en macOS)
 ```
+
+Para publicar una versión, actualiza `version` en `packages/desktop/package.json` y sube una etiqueta con el mismo
+número (`git tag v0.2.0 && git push origin v0.2.0`): GitHub Actions compila el `.dmg` y crea el release.

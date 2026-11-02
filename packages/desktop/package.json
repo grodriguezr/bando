@@ -7,7 +7,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.main.json && vite build",
     "start": "npm run build && electron .",
-    "dev": "tsc -p tsconfig.main.json && node scripts/dev.js"
+    "dev": "tsc -p tsconfig.main.json && node scripts/dev.js",
+    "package": "npm run build && node scripts/package.js"
   },
   "dependencies": {
     "@bando/core": "*",
@@ -21,6 +22,8 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
     "vite": "^8.3.5"
-  }
+  },
+  "productName": "Bando"
 }

@@ -9,6 +9,7 @@
     "build": "tsc -b packages/core packages/cli && npm run build -w @bando/desktop",
     "analyze": "node packages/cli/dist/index.js analyze",
     "desktop": "tsc -b packages/core && npm run dev -w @bando/desktop",
+    "package": "npm run package -w @bando/desktop",
     "typecheck": "tsc -b packages/core packages/cli && tsc -p packages/desktop/tsconfig.json",
     "test": "tsc -b packages/core && npm test -w @bando/core",
     "format": "prettier --write .",
